@@ -1,0 +1,134 @@
+---
+id: chapter1-embodied-intelligence
+title: Introduction to Embodied Intelligence
+sidebar_position: 1
+description: Learn the fundamental difference between AI agents and physical robots, and understand what makes embodied intelligence unique
+keywords: [embodied intelligence, physical ai, robotics, ai agents, humanoid robots, ros 2]
+tags: [fundamentals, ai, robotics]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatPlaceholder from '@site/src/components/ChatPlaceholder';
+
+# Introduction to Embodied Intelligence
+
+Welcome to the first chapter of your Physical AI journey! In this chapter, you'll explore the fundamental concept of **embodied intelligence** and understand why physical robots present unique challenges compared to traditional AI agents.
+
+<RobotStatus status="online" label="Robot Alpha" />
+
+## Theory: What is Embodied Intelligence?
+
+**Embodied intelligence** refers to AI systems that interact with the physical world through a body—whether that's a humanoid robot, robotic arm, or autonomous vehicle. Unlike pure software agents (like ChatGPT or virtual assistants), embodied AI must:
+
+### Key Characteristics of Embodied AI
+
+1. **Physical Presence**: The AI inhabits a physical form that occupies space and has mass
+2. **Sensorimotor Integration**: It perceives the world through sensors (cameras, LIDAR, touch) and acts through actuators (motors, grippers)
+3. **Real-World Constraints**: It must obey physics—gravity, friction, momentum, and collision dynamics
+4. **Temporal Dynamics**: Actions take time, and the world changes while the robot acts
+
+### AI Agents vs. Physical Robots
+
+| Aspect | AI Agents (Software) | Physical Robots (Embodied) |
+|--------|---------------------|----------------------------|
+| **Environment** | Digital, deterministic | Physical, stochastic |
+| **Feedback Loop** | Instant, precise | Delayed, noisy sensors |
+| **Error Cost** | Low (reset easily) | High (damage, safety risks) |
+| **Learning** | Can simulate millions of trials | Limited by real-time constraints |
+| **State Space** | Discrete, finite | Continuous, infinite |
+
+The transition from software to hardware—from simulation to reality—is where **Sim-to-Real** techniques become critical. This textbook will teach you how to bridge that gap effectively.
+
+## Code Example: Basic ROS 2 Node
+
+Let's look at a simple ROS 2 node in Python that demonstrates the sensorimotor loop of an embodied agent:
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Twist
+
+class SimpleRobotNode(Node):
+    def __init__(self):
+        super().__init__('simple_robot_node')
+
+        # Subscribe to LIDAR sensor data
+        self.subscription = self.create_subscription(
+            LaserScan,
+            '/scan',
+            self.sensor_callback,
+            10
+        )
+
+        # Publish velocity commands
+        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+
+        self.get_logger().info('🤖 Embodied AI node initialized')
+
+    def sensor_callback(self, msg):
+        # Get minimum distance from LIDAR scan
+        min_distance = min(msg.ranges)
+
+        # Create velocity command
+        cmd = Twist()
+
+        if min_distance < 0.5:  # Obstacle within 50cm
+            cmd.linear.x = 0.0  # Stop
+            self.get_logger().warn(f'⚠️ Obstacle detected at {min_distance:.2f}m')
+        else:
+            cmd.linear.x = 0.2  # Move forward at 0.2 m/s
+            self.get_logger().info(f'✅ Path clear, distance: {min_distance:.2f}m')
+
+        # Publish command to actuators
+        self.publisher.publish(cmd)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SimpleRobotNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### Code Explanation
+
+This ROS 2 node demonstrates the essence of embodied intelligence:
+
+1. **Perception** (`sensor_callback`): Receives LIDAR sensor data from the physical world
+2. **Decision** (`if min_distance < 0.5`): Processes sensory input to determine action
+3. **Action** (`publisher.publish(cmd)`): Sends motor commands to physical actuators
+
+Notice the **sensorimotor loop**: sense → decide → act → repeat. This is fundamentally different from a chatbot's request → process → respond flow because the robot's environment is continuously changing.
+
+## Interactive Component: Robot Status Monitor
+
+Below is a live status monitor for our simulated robot. In future chapters, this will connect to real robot telemetry!
+
+<RobotStatus status="simulating" label="Training Robot" />
+
+## Ask Questions (Coming Soon)
+
+<ChatPlaceholder />
+
+---
+
+## Key Takeaways
+
+✅ **Embodied intelligence** means AI that interacts with the physical world through a body
+✅ Physical robots face challenges that software agents don't: sensor noise, physics constraints, and real-time dynamics
+✅ The **Sim-to-Real gap** is the central challenge in Physical AI
+✅ ROS 2 provides the infrastructure to implement sensorimotor loops
+
+## Next Steps
+
+In the next chapter, we'll dive deeper into the simulation environments that make safe, rapid iteration possible. You'll learn how to set up **NVIDIA Isaac Sim** and create your first virtual humanoid robot.
+
+**Ready?** Continue to [Chapter 2: Simulation Fundamentals](#) (coming soon)
+
+---
+
+*💡 **Did you know?** The first industrial robot, Unimate, was installed in 1961 at a General Motors plant. It could perform welding tasks—a perfect example of embodied intelligence solving real-world problems!*
