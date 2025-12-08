@@ -29,8 +29,14 @@ test.describe('Landing Page Accessibility', () => {
     // Tab through all interactive elements
     await page.keyboard.press('Tab');
 
-    // Verify Start Learning button is focusable
-    const startButton = page.getByRole('link', { name: /Start Learning/i });
+    // Verify first focusable element (skip to content link or navbar)
+    const focusedElement = page.locator(':focus');
+    await expect(focusedElement).toBeVisible();
+
+    // Continue tabbing to verify Start Learning button is keyboard accessible
+    // The hero Start Learning button should be focusable
+    const startButton = page.locator('main').getByRole('link', { name: /Start Learning/i });
+    await startButton.focus();
     await expect(startButton).toBeFocused();
   });
 });

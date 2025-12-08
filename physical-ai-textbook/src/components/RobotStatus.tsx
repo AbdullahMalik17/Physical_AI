@@ -5,7 +5,7 @@ export interface RobotStatusProps {
   label?: string;
 }
 
-export default function RobotStatus({ status, label = 'System' }: RobotStatusProps): JSX.Element {
+export default function RobotStatus({ status, label = 'System' }: RobotStatusProps): React.JSX.Element {
   const statusColors = {
     online: 'tw-text-green-400',
     offline: 'tw-text-red-400',

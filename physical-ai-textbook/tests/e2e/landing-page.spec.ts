@@ -12,8 +12,8 @@ test.describe('Landing Page Navigation', () => {
     const heroTitle = page.getByRole('heading', { name: /Physical AI/i });
     await expect(heroTitle).toBeVisible();
 
-    // Find and click "Start Learning" button
-    const startButton = page.getByRole('link', { name: /Start Learning/i });
+    // Find and click "Start Learning" button in the hero section (not navbar)
+    const startButton = page.locator('main').getByRole('link', { name: /Start Learning/i });
     await expect(startButton).toBeVisible();
     await startButton.click();
 
@@ -28,16 +28,16 @@ test.describe('Landing Page Navigation', () => {
   test('feature grid displays three features', async ({ page }) => {
     await page.goto('/');
 
-    // Verify ROS 2 feature
-    const rosFeature = page.getByText(/ROS 2/i);
+    // Verify ROS 2 feature (target the heading specifically)
+    const rosFeature = page.getByRole('heading', { name: /ROS 2/i });
     await expect(rosFeature).toBeVisible();
 
     // Verify Isaac Sim feature
-    const isacFeature = page.getByText(/Isaac Sim/i);
+    const isacFeature = page.getByRole('heading', { name: /Isaac Sim/i });
     await expect(isacFeature).toBeVisible();
 
     // Verify RAG Chatbot feature
-    const chatbotFeature = page.getByText(/RAG Chatbot/i);
+    const chatbotFeature = page.getByRole('heading', { name: /RAG Chatbot/i });
     await expect(chatbotFeature).toBeVisible();
   });
 });

@@ -24,18 +24,20 @@ const features: FeatureCardProps[] = [
   },
 ];
 
-export default function Home(): JSX.Element {
+export default function Home(): React.JSX.Element {
   return (
     <Layout
       title="Physical AI: From Simulation to Reality"
       description="Learn to build humanoid robots that can navigate from simulation to the real world">
-      <Hero
-        title="Physical AI"
-        subtitle="Master the journey from simulation to reality. Learn ROS 2, Isaac Sim, and build intelligent humanoid robots."
-        ctaText="Start Learning"
-        ctaLink="/intro"
-      />
-      <FeatureGrid features={features} />
+      <main>
+        <Hero
+          title="Physical AI"
+          subtitle="Master the journey from simulation to reality. Learn ROS 2, Isaac Sim, and build intelligent humanoid robots."
+          ctaText="Start Learning"
+          ctaLink="/intro"
+        />
+        <FeatureGrid features={features} />
+      </main>
     </Layout>
   );
 }

@@ -1,41 +1,91 @@
-# Website
+# Physical AI Textbook Platform
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+An interactive learning platform for **Physical AI & Humanoid Robotics**, teaching the "Sim-to-Real" journey from simulation to real-world deployment.
 
-## Installation
+Built with [Docusaurus 3.x](https://docusaurus.io/)
 
-```bash
-yarn
-```
+## 🎯 Features
 
-## Local Development
+- Interactive Landing Page with feature showcase
+- Structured 3-part curriculum (Fundamentals, Simulation, Real World)
+- Chapter template with Theory, Code Examples, and Interactive Components
+- Multilingual support (English + Urdu structure)
+- Dark mode cyberpunk theme
+- Accessibility-first (WCAG 2.1 AA, Lighthouse ≥90)
 
-```bash
-yarn start
-```
-
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
-
-## Build
+## 🚀 Quick Start
 
 ```bash
-yarn build
+# Install dependencies
+npm install
+
+# Start development server
+npm start
+
+# Build for production
+npm run build
+npm run serve
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
+The site opens at `http://localhost:3000`
 
-## Deployment
-
-Using SSH:
+## 🧪 Testing
 
 ```bash
-USE_SSH=true yarn deploy
+npm test              # Unit tests
+npm run test:e2e      # E2E tests
+npm run test:lighthouse  # Accessibility audit
+npm run typecheck     # TypeScript check
 ```
 
-Not using SSH:
+## 📁 Project Structure
 
+```
+physical-ai-textbook/
+├── docs/              # MDX content
+├── src/
+│   ├── components/    # React components
+│   ├── css/          # Theme styling
+│   └── pages/        # Custom pages
+├── tests/            # Unit & E2E tests
+└── i18n/             # Translations
+```
+
+## 🎨 Tech Stack
+
+- **Framework**: Docusaurus 3.x
+- **Language**: TypeScript 5.x
+- **Styling**: Tailwind CSS v4 + Infima
+- **Testing**: Jest, Playwright, Lighthouse CI
+
+## 📚 Documentation
+
+See `../specs/001-physical-ai-platform/` for:
+- `spec.md` - Feature requirements
+- `plan.md` - Architecture decisions
+- `tasks.md` - Implementation tasks
+- `quickstart.md` - Detailed setup guide
+
+## 🚢 Deployment
+
+### Vercel (Recommended)
 ```bash
-GIT_USER=<Your GitHub username> yarn deploy
+npm i -g vercel && vercel
 ```
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+### GitHub Pages
+```bash
+GIT_USER=<username> npm run deploy
+```
+
+## 🤝 Contributing
+
+Contributions welcome! See project spec for guidelines.
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
+
+---
+
+Built with ❤️ for Physical AI learners

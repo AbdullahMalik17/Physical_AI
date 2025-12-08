@@ -184,16 +184,16 @@ Phase 1 (Setup) → Phase 2 (Foundational) → Phase 3 (US1) → Phase 4 (US2) �
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T046 [P] [US3] Create E2E test for locale dropdown in physical-ai-textbook/tests/e2e/locale-toggle.spec.ts (test: locale dropdown visible in navbar, click dropdown shows English and Urdu options, selecting Urdu changes URL to /ur/)
+- [X] T046 [P] [US3] Create E2E test for locale dropdown in physical-ai-textbook/tests/e2e/locale-toggle.spec.ts (test: locale dropdown visible in navbar, click dropdown shows English and Urdu options, selecting Urdu changes URL to /ur/)
 
 ### Implementation for User Story 3
 
-- [ ] T047 [US3] Verify localeDropdown already configured in navbar from T010 (physical-ai-textbook/docusaurus.config.ts)
-- [ ] T048 [US3] Create Urdu locale directory structure: `mkdir -p physical-ai-textbook/i18n/ur/docusaurus-plugin-content-docs/current`
-- [ ] T049 [US3] Create placeholder Urdu intro page in physical-ai-textbook/i18n/ur/docusaurus-plugin-content-docs/current/intro.mdx (same structure as English, but with "(Urdu translation coming soon)" note)
+- [X] T047 [US3] Verify localeDropdown already configured in navbar from T010 (physical-ai-textbook/docusaurus.config.ts)
+- [X] T048 [US3] Create Urdu locale directory structure: `mkdir -p physical-ai-textbook/i18n/ur/docusaurus-plugin-content-docs/current`
+- [X] T049 [US3] Create placeholder Urdu intro page in physical-ai-textbook/i18n/ur/docusaurus-plugin-content-docs/current/intro.mdx (same structure as English, but with "(Urdu translation coming soon)" note)
 - [ ] T050 [US3] Run E2E test (npm run test:e2e) and verify T046 passes
 
-**Checkpoint**: US3 complete - Language toggle functional (UI only, translations deferred to future milestone)
+**Checkpoint**: ✅ US3 locale structure complete - Tests ready to run
 
 ---
 

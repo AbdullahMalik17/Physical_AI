@@ -4,7 +4,7 @@ export interface ChatPlaceholderProps {
   message?: string;
 }
 
-export default function ChatPlaceholder({ message = 'Coming Soon' }: ChatPlaceholderProps): JSX.Element {
+export default function ChatPlaceholder({ message = 'Coming Soon' }: ChatPlaceholderProps): React.JSX.Element {
   return (
     <div className="tw-my-6 tw-p-6 tw-bg-gray-800 tw-rounded-lg tw-border tw-border-gray-700">
       <div className="tw-flex tw-items-center tw-gap-2 tw-mb-4">

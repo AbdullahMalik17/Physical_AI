@@ -8,7 +8,7 @@ export interface HeroProps {
   ctaLink: string;
 }
 
-export default function Hero({ title, subtitle, ctaText, ctaLink }: HeroProps): JSX.Element {
+export default function Hero({ title, subtitle, ctaText, ctaLink }: HeroProps): React.JSX.Element {
   return (
     <header className="tw-relative tw-overflow-hidden tw-bg-gradient-to-br tw-from-deep-space tw-to-gray-900 tw-py-20 tw-px-4">
       <div className="tw-container tw-mx-auto tw-max-w-6xl tw-text-center">
@@ -20,7 +20,8 @@ export default function Hero({ title, subtitle, ctaText, ctaLink }: HeroProps): 
         </p>
         <Link
           to={ctaLink}
-          className="tw-inline-block tw-px-8 tw-py-4 tw-bg-cyber-cyan tw-text-deep-space tw-font-semibold tw-rounded-lg tw-text-lg hover:tw-bg-opacity-90 tw-transition-all hover:tw-scale-105 tw-no-underline">
+          className="tw-inline-block tw-px-8 tw-py-4 tw-bg-cyber-cyan tw-text-deep-space tw-font-semibold tw-rounded-lg tw-text-lg hover:tw-bg-opacity-90 tw-transition-all hover:tw-scale-105 tw-no-underline tw-border-2 tw-border-cyber-cyan"
+          style={{ color: '#0f0f23' }}>
           {ctaText}
         </Link>
       </div>

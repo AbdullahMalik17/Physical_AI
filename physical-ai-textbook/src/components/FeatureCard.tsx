@@ -8,7 +8,7 @@ export interface FeatureCardProps {
   link?: string;
 }
 
-export default function FeatureCard({ icon, title, description, link }: FeatureCardProps): JSX.Element {
+export default function FeatureCard({ icon, title, description, link }: FeatureCardProps): React.JSX.Element {
   const CardContent = (
     <>
       <div className="tw-text-5xl tw-mb-4">{icon}</div>
