@@ -6,33 +6,45 @@ describe('RobotStatus Component', () => {
   it('renders online status with green indicator', () => {
     render(<RobotStatus status="online" label="Robot Alpha" />);
 
-    const statusText = screen.getByText(/Robot Alpha: ONLINE/i);
-    expect(statusText).toBeInTheDocument();
+    // Check for label and status text separately (text is split across elements)
+    expect(screen.getByText(/Robot Alpha/i)).toBeInTheDocument();
+    expect(screen.getByText(/ONLINE/i)).toBeInTheDocument();
 
-    // Check for status indicator (bullet point)
-    const container = screen.getByText(/Robot Alpha: ONLINE/i).closest('div');
-    expect(container).toBeInTheDocument();
+    // Check for green color class
+    const container = screen.getByText(/Robot Alpha/i).closest('div');
+    expect(container).toHaveClass('tw-bg-green-400/10');
   });
 
   it('renders offline status with red indicator', () => {
     render(<RobotStatus status="offline" label="Robot Beta" />);
 
-    const statusText = screen.getByText(/Robot Beta: OFFLINE/i);
-    expect(statusText).toBeInTheDocument();
+    // Check for label and status text separately (text is split across elements)
+    expect(screen.getByText(/Robot Beta/i)).toBeInTheDocument();
+    expect(screen.getByText(/OFFLINE/i)).toBeInTheDocument();
+
+    // Check for red color class
+    const container = screen.getByText(/Robot Beta/i).closest('div');
+    expect(container).toHaveClass('tw-bg-red-400/10');
   });
 
   it('renders simulating status with yellow indicator', () => {
     render(<RobotStatus status="simulating" label="Robot Gamma" />);
 
-    const statusText = screen.getByText(/Robot Gamma: SIMULATING/i);
-    expect(statusText).toBeInTheDocument();
+    // Check for label and status text separately (text is split across elements)
+    expect(screen.getByText(/Robot Gamma/i)).toBeInTheDocument();
+    expect(screen.getByText(/SIMULATING/i)).toBeInTheDocument();
+
+    // Check for yellow color class
+    const container = screen.getByText(/Robot Gamma/i).closest('div');
+    expect(container).toHaveClass('tw-bg-yellow-400/10');
   });
 
   it('uses default "System" label when not provided', () => {
     render(<RobotStatus status="online" />);
 
-    const statusText = screen.getByText(/System: ONLINE/i);
-    expect(statusText).toBeInTheDocument();
+    // Check for label and status text separately (text is split across elements)
+    expect(screen.getByText(/System/i)).toBeInTheDocument();
+    expect(screen.getByText(/ONLINE/i)).toBeInTheDocument();
   });
 
   it('applies correct color classes based on status', () => {
