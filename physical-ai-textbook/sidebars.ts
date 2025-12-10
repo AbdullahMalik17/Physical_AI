@@ -25,6 +25,9 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'part1-fundamentals/chapter1-embodied-intelligence',
+        'part1-fundamentals/chapter2-sensor-systems',
+        'part1-fundamentals/chapter3-motor-control',
+        'part1-fundamentals/chapter4-simulation',
       ],
     },
     // Part 2 and 3 will be added in future milestones
