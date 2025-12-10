@@ -1,0 +1,665 @@
+---
+id: chapter3-motor-control
+title: "Chapter 3: Motor Control and Actuation"
+sidebar_position: 3
+description: "Understanding actuators, motor control, and how robots move in the physical world"
+keywords: [actuators, motors, servos, motor control, torque, physical ai, robotics]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatRAG from '@site/src/components/ChatRAG';
+
+# Chapter 3: Motor Control and Actuation
+
+## Introduction
+
+After learning how robots perceive the world through sensors (Chapter 2), we now explore how they **act** in it. Actuators are the muscles of a robot—converting electrical signals into physical motion. This chapter covers motor types, control strategies, and the challenges of precise movement in humanoid robotics.
+
+:::info Learning Objectives
+By the end of this chapter, you will understand:
+- The three main motor types used in robotics
+- How servo motors enable precise position control
+- Torque calculation and joint mechanics
+- PID control for smooth motion
+- ROS 2 motor control implementation
+:::
+
+## The Actuation Hierarchy
+
+Just as sensors give robots perception, **actuators** provide action. For humanoid robots, this means coordinating dozens of motors simultaneously.
+
+| Motor Type | Use Case | Pros | Cons | Typical Cost |
+|------------|----------|------|------|--------------|
+| **DC Motor** | Wheels, fans, continuous rotation | Simple, cheap, reliable | No position feedback | $5-$20 |
+| **Servo Motor** | Joints, grippers, precise angles | Position control, feedback | Limited range (0-180°) | $10-$100 |
+| **Stepper Motor** | 3D printers, CNC, accurate steps | No feedback needed, holds position | Lower torque, can skip steps | $15-$50 |
+| **BLDC Motor** | Drones, high-speed applications | Efficient, powerful, smooth | Complex control, expensive | $50-$500 |
+
+<RobotStatus status="online" label="Motor Controller Active" />
+
+## 1. DC Motors: The Basics
+
+### How DC Motors Work
+
+**Direct Current (DC) motors** convert electrical energy into rotational motion:
+
+```
+Voltage → Current → Magnetic Field → Rotation
+```
+
+**Key Parameters:**
+- **Voltage (V)**: Power supply (e.g., 12V)
+- **Current (A)**: Power draw (e.g., 2A = 24W)
+- **RPM**: Revolutions per minute (speed)
+- **Torque (Nm)**: Rotational force
+
+### Torque-Speed Relationship
+
+```
+At No Load: Maximum Speed, Minimum Torque
+At Stall: Maximum Torque, Zero Speed
+
+Optimal Operating Point: ~75% of max speed
+```
+
+### ROS 2 DC Motor Control
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Float32
+import RPi.GPIO as GPIO  # For Raspberry Pi
+
+class DCMotorController(Node):
+    def __init__(self):
+        super().__init__('dc_motor_controller')
+
+        # GPIO Setup (BCM numbering)
+        self.MOTOR_PIN = 18  # PWM-capable pin
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.MOTOR_PIN, GPIO.OUT)
+
+        # PWM at 1000 Hz
+        self.pwm = GPIO.PWM(self.MOTOR_PIN, 1000)
+        self.pwm.start(0)  # Start at 0% duty cycle
+
+        # Subscribe to motor speed commands (-100 to 100)
+        self.subscription = self.create_subscription(
+            Float32,
+            '/motor/speed',
+            self.speed_callback,
+            10
+        )
+
+        self.get_logger().info('DC Motor Controller initialized')
+
+    def speed_callback(self, msg):
+        """
+        Set motor speed from -100 (full reverse) to 100 (full forward)
+        """
+        speed = max(-100, min(100, msg.data))  # Clamp to range
+
+        # Convert to duty cycle (0-100%)
+        duty_cycle = abs(speed)
+
+        # Set direction (in real implementation, use H-bridge pins)
+        if speed > 0:
+            self.get_logger().info(f'Forward: {duty_cycle:.1f}%')
+        elif speed < 0:
+            self.get_logger().info(f'Reverse: {duty_cycle:.1f}%')
+        else:
+            self.get_logger().info('Stopped')
+
+        # Apply PWM
+        self.pwm.ChangeDutyCycle(duty_cycle)
+
+    def destroy_node(self):
+        self.pwm.stop()
+        GPIO.cleanup()
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = DCMotorController()
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### H-Bridge Motor Driver
+
+To control direction and braking, use an **H-bridge** driver:
+
+**Popular Chips:**
+- **L298N**: Dual motor, 2A per channel, $2-$5
+- **TB6612FNG**: Dual motor, 1.2A, more efficient, $3-$8
+- **DRV8833**: Dual motor, 1.5A, compact, $4-$10
+
+## 2. Servo Motors: Precision Control
+
+### What Makes Servos Special?
+
+**Servo motors** include:
+1. **DC motor** (for rotation)
+2. **Gearbox** (increases torque, reduces speed)
+3. **Potentiometer** (position feedback)
+4. **Control circuit** (PID controller)
+
+### Servo Communication
+
+**PWM Signal:**
+```
+Pulse Width Modulation:
+- 1.0 ms pulse = 0° (or minimum angle)
+- 1.5 ms pulse = 90° (center)
+- 2.0 ms pulse = 180° (maximum angle)
+- Frequency: 50 Hz (20 ms period)
+```
+
+### Types of Servos
+
+| Type | Angle Range | Use Case | Example |
+|------|-------------|----------|---------|
+| **Standard** | 0-180° | Arms, legs | SG90, MG996R |
+| **Continuous** | 360° rotation | Wheels | FS90R |
+| **Digital** | 0-180°, faster | High-performance | Dynamixel AX-12A |
+
+### ROS 2 Servo Control
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+import pigpio  # Hardware PWM library
+
+class ServoController(Node):
+    def __init__(self):
+        super().__init__('servo_controller')
+
+        # Initialize pigpio for hardware PWM
+        self.pi = pigpio.pi()
+
+        # Define servo pins and ranges
+        self.servos = {
+            'shoulder': {'pin': 12, 'min': 500, 'max': 2500},
+            'elbow': {'pin': 13, 'min': 500, 'max': 2500},
+            'wrist': {'pin': 19, 'min': 500, 'max': 2500},
+        }
+
+        # Subscribe to joint commands
+        self.subscription = self.create_subscription(
+            JointState,
+            '/joint_commands',
+            self.joint_callback,
+            10
+        )
+
+        self.get_logger().info('Servo Controller initialized')
+
+    def angle_to_pulse_width(self, angle, min_pw, max_pw):
+        """
+        Convert angle (0-180°) to pulse width (microseconds)
+        """
+        # Linear mapping
+        pulse_width = min_pw + (angle / 180.0) * (max_pw - min_pw)
+        return int(pulse_width)
+
+    def joint_callback(self, msg):
+        """
+        Receive joint angles and move servos
+        """
+        for i, name in enumerate(msg.name):
+            if name in self.servos:
+                angle = msg.position[i]  # In radians (convert from radians to degrees)
+                angle_deg = angle * 180.0 / 3.14159
+
+                # Clamp to 0-180°
+                angle_deg = max(0, min(180, angle_deg))
+
+                # Get servo config
+                servo = self.servos[name]
+                pulse_width = self.angle_to_pulse_width(
+                    angle_deg,
+                    servo['min'],
+                    servo['max']
+                )
+
+                # Set servo position
+                self.pi.set_servo_pulsewidth(servo['pin'], pulse_width)
+
+                self.get_logger().info(
+                    f'{name}: {angle_deg:.1f}° (pulse: {pulse_width}μs)'
+                )
+
+    def destroy_node(self):
+        # Turn off all servos
+        for servo in self.servos.values():
+            self.pi.set_servo_pulsewidth(servo['pin'], 0)
+        self.pi.stop()
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ServoController()
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+```
+
+## 3. Stepper Motors: Precise Steps
+
+### How Steppers Work
+
+**Stepper motors** rotate in discrete steps (e.g., 1.8° per step = 200 steps/revolution).
+
+**Advantages:**
+- Open-loop control (no feedback needed)
+- Holds position when powered
+- Precise angular positioning
+
+**Disadvantages:**
+- Can skip steps if overloaded
+- Lower torque-to-weight ratio
+- Vibration at certain speeds
+
+### ROS 2 Stepper Control
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Int32
+import RPi.GPIO as GPIO
+import time
+
+class StepperController(Node):
+    def __init__(self):
+        super().__init__('stepper_controller')
+
+        # GPIO pins for stepper driver (e.g., A4988)
+        self.STEP_PIN = 20
+        self.DIR_PIN = 21
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.STEP_PIN, GPIO.OUT)
+        GPIO.setup(self.DIR_PIN, GPIO.OUT)
+
+        # Stepper parameters
+        self.steps_per_rev = 200  # 1.8° per step
+        self.step_delay = 0.001   # 1ms = 1000 steps/sec
+
+        # Subscribe to step commands
+        self.subscription = self.create_subscription(
+            Int32,
+            '/stepper/steps',
+            self.step_callback,
+            10
+        )
+
+        self.get_logger().info('Stepper Controller initialized')
+
+    def step_callback(self, msg):
+        """
+        Move stepper by N steps (positive = CW, negative = CCW)
+        """
+        steps = msg.data
+        direction = GPIO.HIGH if steps > 0 else GPIO.LOW
+        GPIO.output(self.DIR_PIN, direction)
+
+        for _ in range(abs(steps)):
+            GPIO.output(self.STEP_PIN, GPIO.HIGH)
+            time.sleep(self.step_delay)
+            GPIO.output(self.STEP_PIN, GPIO.LOW)
+            time.sleep(self.step_delay)
+
+        angle = (steps / self.steps_per_rev) * 360
+        self.get_logger().info(f'Moved {steps} steps ({angle:.1f}°)')
+
+    def destroy_node(self):
+        GPIO.cleanup()
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = StepperController()
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+```
+
+## 4. Advanced Control: PID Controllers
+
+### The Problem: Smooth Motion
+
+Simply setting a target angle isn't enough—robots need smooth acceleration and deceleration.
+
+### PID Control Explained
+
+**PID = Proportional + Integral + Derivative**
+
+```python
+error = target - current_position
+
+P = Kp * error              # React to current error
+I = Ki * sum(error)         # Correct accumulated error
+D = Kd * (error - prev_error)  # Dampen oscillations
+
+output = P + I + D
+```
+
+**Tuning Parameters:**
+- **Kp**: Proportional gain (responsiveness)
+- **Ki**: Integral gain (eliminates steady-state error)
+- **Kd**: Derivative gain (reduces overshoot)
+
+### ROS 2 PID Motor Control
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float32
+import time
+
+class PIDController(Node):
+    def __init__(self):
+        super().__init__('pid_controller')
+
+        # PID gains (tune these!)
+        self.Kp = 1.0
+        self.Ki = 0.1
+        self.Kd = 0.05
+
+        # PID state
+        self.target = 0.0
+        self.current = 0.0
+        self.integral = 0.0
+        self.prev_error = 0.0
+        self.prev_time = time.time()
+
+        # Subscribe to target position
+        self.target_sub = self.create_subscription(
+            Float32, '/joint/target', self.target_callback, 10
+        )
+
+        # Subscribe to current position (from encoder)
+        self.feedback_sub = self.create_subscription(
+            JointState, '/joint/state', self.feedback_callback, 10
+        )
+
+        # Publish motor command
+        self.cmd_pub = self.create_publisher(Float32, '/motor/command', 10)
+
+        # Control loop at 100 Hz
+        self.create_timer(0.01, self.control_loop)
+
+        self.get_logger().info('PID Controller initialized')
+
+    def target_callback(self, msg):
+        self.target = msg.data
+
+    def feedback_callback(self, msg):
+        if len(msg.position) > 0:
+            self.current = msg.position[0]
+
+    def control_loop(self):
+        # Calculate time delta
+        current_time = time.time()
+        dt = current_time - self.prev_time
+        self.prev_time = current_time
+
+        # Calculate error
+        error = self.target - self.current
+
+        # Proportional term
+        P = self.Kp * error
+
+        # Integral term (with anti-windup)
+        self.integral += error * dt
+        self.integral = max(-10, min(10, self.integral))  # Clamp
+        I = self.Ki * self.integral
+
+        # Derivative term
+        D = self.Kd * (error - self.prev_error) / dt if dt > 0 else 0
+        self.prev_error = error
+
+        # PID output
+        output = P + I + D
+
+        # Publish motor command
+        cmd = Float32()
+        cmd.data = output
+        self.cmd_pub.publish(cmd)
+
+        self.get_logger().info(
+            f'Target: {self.target:.2f}, Current: {self.current:.2f}, '
+            f'Error: {error:.2f}, Output: {output:.2f}'
+        )
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = PIDController()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+```
+
+### Tuning PID Gains
+
+**Ziegler-Nichols Method:**
+1. Set Ki = Kd = 0
+2. Increase Kp until oscillation
+3. Note critical gain (Ku) and period (Tu)
+4. Calculate: Kp = 0.6*Ku, Ki = 1.2*Ku/Tu, Kd = 0.075*Ku*Tu
+
+:::tip Pro Tip
+Start conservative:
+- Kp = 0.5
+- Ki = 0.01
+- Kd = 0.001
+
+Then increase Kp for faster response, Ki to eliminate steady-state error, and Kd to reduce overshoot.
+:::
+
+## 5. Humanoid Joint Control
+
+### Degrees of Freedom (DOF)
+
+A typical humanoid robot has:
+
+| Body Part | DOF | Motors | Example Joints |
+|-----------|-----|--------|----------------|
+| **Head** | 2-3 | 2-3 | Pan, tilt, (roll) |
+| **Arms** | 6-7 each | 12-14 | Shoulder (3), elbow (1), wrist (2-3) |
+| **Torso** | 3 | 3 | Waist rotation, lean |
+| **Legs** | 6 each | 12 | Hip (3), knee (1), ankle (2) |
+| **Hands** | 5-20 each | 10-40 | Fingers, thumb |
+
+**Total: 35-80+ motors**
+
+### Coordinated Motion
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+import numpy as np
+
+class HumanoidController(Node):
+    def __init__(self):
+        super().__init__('humanoid_controller')
+
+        # Define humanoid structure
+        self.joints = [
+            'left_shoulder_pitch', 'left_shoulder_roll', 'left_elbow',
+            'right_shoulder_pitch', 'right_shoulder_roll', 'right_elbow',
+            'left_hip_pitch', 'left_hip_roll', 'left_knee',
+            'right_hip_pitch', 'right_hip_roll', 'right_knee',
+        ]
+
+        # Publisher for joint commands
+        self.pub = self.create_publisher(JointState, '/joint_commands', 10)
+
+        # Timer for motion sequences
+        self.create_timer(0.1, self.motion_loop)
+        self.t = 0.0
+
+        self.get_logger().info('Humanoid Controller initialized')
+
+    def motion_loop(self):
+        """
+        Example: Wave right arm
+        """
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = self.joints
+
+        # Sinusoidal wave motion
+        right_shoulder = np.sin(self.t) * 0.5  # -0.5 to 0.5 radians
+        right_elbow = np.sin(self.t * 2) * 0.3 + 0.5  # Bend elbow
+
+        # All other joints at neutral (0)
+        msg.position = [
+            0.0, 0.0, 0.0,  # Left arm
+            right_shoulder, 0.5, right_elbow,  # Right arm (waving)
+            0.0, 0.0, 0.0,  # Left leg
+            0.0, 0.0, 0.0,  # Right leg
+        ]
+
+        self.pub.publish(msg)
+        self.t += 0.1
+
+        if self.t > 2 * np.pi:  # One full wave
+            self.t = 0.0
+            self.get_logger().info('Wave complete!')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = HumanoidController()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+```
+
+<RobotStatus status="simulating" label="Humanoid Arm Waving" />
+
+## 6. Torque and Power Calculations
+
+### Torque Requirements
+
+For a humanoid robot arm lifting a 1 kg object at 30 cm from the shoulder:
+
+```
+Torque = Force × Distance
+Force = mass × gravity = 1 kg × 9.81 m/s² = 9.81 N
+Distance = 0.3 m
+Torque = 9.81 N × 0.3 m = 2.94 Nm
+
+With safety factor (2x): 5.88 Nm required
+```
+
+### Motor Selection
+
+| Application | Torque Needed | Motor Type | Example |
+|-------------|---------------|------------|---------|
+| Finger | 0.1-0.3 Nm | Micro servo | SG90 (0.18 Nm @ 4.8V) |
+| Wrist | 0.5-1 Nm | Standard servo | MG996R (1.0 Nm @ 6V) |
+| Elbow | 2-5 Nm | Digital servo | Dynamixel MX-28 (2.5 Nm) |
+| Knee | 10-30 Nm | High-torque servo | Dynamixel MX-106 (8.4 Nm) |
+
+### Power Consumption
+
+```python
+def calculate_power(voltage, current, efficiency=0.8):
+    """
+    Calculate motor power consumption
+
+    Args:
+        voltage: Supply voltage (V)
+        current: Current draw (A)
+        efficiency: Motor efficiency (0-1)
+
+    Returns:
+        Power in Watts
+    """
+    electrical_power = voltage * current
+    mechanical_power = electrical_power * efficiency
+
+    return {
+        'electrical': electrical_power,
+        'mechanical': mechanical_power,
+        'heat': electrical_power - mechanical_power,
+    }
+
+# Example: 12V motor drawing 2A
+power = calculate_power(12, 2)
+print(f"Electrical: {power['electrical']}W")
+print(f"Mechanical: {power['mechanical']}W")
+print(f"Heat dissipated: {power['heat']}W")
+```
+
+**Output:**
+```
+Electrical: 24W
+Mechanical: 19.2W
+Heat dissipated: 4.8W
+```
+
+## Hardware Recommendations
+
+### Beginner Kit (~$200)
+- **6x SG90 Servos**: Micro servos for small joints ($12)
+- **2x MG996R Servos**: Standard servos for arms ($20)
+- **PCA9685**: 16-channel servo driver ($8)
+- **L298N H-Bridge**: Dual DC motor driver ($5)
+- **12V 5A Power Supply**: For motors ($15)
+- **Buck Converter**: Step down to 5V for servos ($5)
+
+### Intermediate Kit (~$800)
+- **4x Dynamixel AX-12A**: Smart servos with feedback ($200)
+- **2x Dynamixel MX-28**: Higher torque for legs ($400)
+- **U2D2**: USB to Dynamixel adapter ($50)
+- **LiPo Battery**: 14.8V 5000mAh ($60)
+
+### Professional Setup (~$5,000)
+- **12x Dynamixel MX-106**: High-torque for humanoid ($3,600)
+- **Dynamixel Pro Series**: Industrial-grade ($2,000+)
+- **Custom motor drivers**: For BLDC motors ($500)
+
+## Summary
+
+Motor control is the foundation of robotic action:
+
+1. **DC Motors**: Simple, continuous rotation (wheels, fans)
+2. **Servo Motors**: Precise position control (joints, grippers)
+3. **Stepper Motors**: Accurate steps without feedback (CNC, 3D printers)
+4. **PID Control**: Smooth, accurate motion with feedback
+5. **Coordinated Control**: Managing multiple motors simultaneously
+
+In Chapter 4, we'll simulate these systems in NVIDIA Isaac Sim before deploying to real hardware.
+
+---
+
+<ChatRAG context="motors, servos, actuators, PID control, motor control, ROS 2" placeholder="Ask about motor selection, torque calculations, or control strategies..." />
+
+## Practice Exercises
+
+1. **Servo Wave**: Program a servo to wave back and forth smoothly
+2. **PID Tuning**: Implement and tune a PID controller for position control
+3. **Multi-Joint**: Control 3 servos to move a robotic arm to a target position
+4. **Power Budget**: Calculate total power requirements for a 12-motor humanoid
+
+## Further Reading
+
+- [ROS 2 Control Framework](https://control.ros.org/)
+- [Dynamixel SDK Documentation](https://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_sdk/overview/)
+- [PID Without a PhD (Tim Wescott)](http://www.wescottdesign.com/articles/pid/pidWithoutAPhd.pdf)
+- [Robotics: Modelling, Planning and Control (Siciliano et al.)](https://www.springer.com/gp/book/9781846286414)

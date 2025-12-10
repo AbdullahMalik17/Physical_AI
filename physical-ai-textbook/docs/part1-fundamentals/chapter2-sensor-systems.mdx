@@ -1,0 +1,446 @@
+---
+id: chapter2-sensor-systems
+title: "Chapter 2: Sensor Systems and Perception"
+sidebar_position: 2
+description: "Understanding the sensory systems that allow robots to perceive the physical world"
+keywords: [sensors, lidar, cameras, imu, perception, physical ai, robotics]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatRAG from '@site/src/components/ChatRAG';
+
+# Chapter 2: Sensor Systems and Perception
+
+## Introduction
+
+Physical AI systems must perceive and understand the physical world to operate effectively. Unlike digital AI that processes text and images in isolation, physical AI requires real-time sensory input to navigate, manipulate objects, and interact with humans safely.
+
+:::info Learning Objectives
+By the end of this chapter, you will understand:
+- The four primary sensor categories for robotics
+- How LiDAR enables spatial awareness
+- Camera systems for visual perception
+- IMUs for balance and orientation
+- Force/torque sensors for manipulation
+:::
+
+## The Sensory Hierarchy
+
+Human perception relies on five senses. Robots use four primary sensor categories:
+
+| Sensor Type | Human Equivalent | Purpose | Key Technologies |
+|-------------|------------------|---------|------------------|
+| **Vision** | Eyes | Object detection, recognition, depth | RGB Cameras, Depth Cameras, Stereo Vision |
+| **Spatial Awareness** | Proprioception | Distance measurement, mapping | LiDAR, Ultrasonic, Radar |
+| **Balance & Motion** | Inner Ear (Vestibular) | Orientation, acceleration | IMU (Accelerometer + Gyroscope) |
+| **Touch** | Tactile Sensors | Grip force, collision detection | Force/Torque Sensors, Pressure Arrays |
+
+### Why Multiple Sensors?
+
+**Sensor Fusion** combines data from multiple sources to create a reliable world model. For example:
+- **Camera** sees an object (what it is)
+- **LiDAR** measures distance (where it is)
+- **IMU** confirms the robot isn't tilting (stability check)
+- **Force sensor** verifies grip strength (manipulation feedback)
+
+## 1. LiDAR: Light Detection and Ranging
+
+### How LiDAR Works
+
+LiDAR emits laser pulses and measures the time it takes for light to bounce back:
+
+```
+Time-of-Flight Calculation:
+Distance = (Speed of Light × Time) / 2
+
+Example:
+- Light travels at 299,792,458 m/s
+- Pulse returns in 0.00000002 seconds (20 nanoseconds)
+- Distance = (299,792,458 × 0.00000002) / 2 = 3 meters
+```
+
+### Types of LiDAR
+
+1. **2D LiDAR** (e.g., Hokuyo, SICK)
+   - Scans a single horizontal plane
+   - Used for navigation and obstacle avoidance
+   - Common in mobile robots and autonomous vehicles
+
+2. **3D LiDAR** (e.g., Velodyne, Ouster)
+   - Creates 3D point clouds
+   - Used for SLAM (Simultaneous Localization and Mapping)
+   - Essential for humanoid navigation
+
+### ROS 2 LiDAR Integration
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan
+import numpy as np
+
+class LidarProcessor(Node):
+    def __init__(self):
+        super().__init__('lidar_processor')
+        self.subscription = self.create_subscription(
+            LaserScan,
+            '/scan',  # Standard LiDAR topic
+            self.lidar_callback,
+            10
+        )
+
+    def lidar_callback(self, msg):
+        # Extract distance measurements
+        ranges = np.array(msg.ranges)
+
+        # Find closest obstacle
+        min_distance = np.min(ranges[np.isfinite(ranges)])
+
+        # Calculate angle to closest obstacle
+        min_index = np.argmin(ranges)
+        angle = msg.angle_min + (min_index * msg.angle_increment)
+
+        self.get_logger().info(
+            f'Closest obstacle: {min_distance:.2f}m at {np.degrees(angle):.1f}°'
+        )
+
+        # Safety check
+        if min_distance < 0.5:  # 50cm threshold
+            self.get_logger().warn('⚠️ Obstacle detected! Stopping.')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = LidarProcessor()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+<RobotStatus status="simulating" label="LiDAR Scanner" />
+
+## 2. Camera Systems: The Robot's Eyes
+
+### RGB Cameras
+
+Standard color cameras provide visual information:
+- **Resolution**: 1920×1080 (Full HD) typical for robotics
+- **Frame Rate**: 30 FPS minimum, 60 FPS preferred
+- **Field of View**: 60-120° depending on lens
+
+### Depth Cameras
+
+Depth cameras add distance information to each pixel:
+
+**Intel RealSense D435i** (Industry Standard):
+- RGB camera: 1920×1080 @ 30 FPS
+- Depth range: 0.3m to 10m
+- Built-in IMU for motion tracking
+- USB 3.0 interface
+
+**Technology Comparison**:
+
+| Method | Technology | Range | Accuracy | Sunlight |
+|--------|-----------|-------|----------|----------|
+| Stereo Vision | Two cameras calculate depth | 0.5-15m | ±2% | ✅ Works |
+| Structured Light | Projects IR pattern | 0.3-3m | ±1mm | ❌ Fails |
+| Time-of-Flight | Measures light travel time | 0.5-8m | ±1cm | ⚠️ Degraded |
+
+### ROS 2 Camera Processing
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+class DepthProcessor(Node):
+    def __init__(self):
+        super().__init__('depth_processor')
+        self.bridge = CvBridge()
+
+        # Subscribe to RGB and Depth streams
+        self.rgb_sub = self.create_subscription(
+            Image, '/camera/color/image_raw', self.rgb_callback, 10
+        )
+        self.depth_sub = self.create_subscription(
+            Image, '/camera/depth/image_raw', self.depth_callback, 10
+        )
+
+    def rgb_callback(self, msg):
+        # Convert ROS Image to OpenCV format
+        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+        # Simple object detection (example: red object)
+        hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+        lower_red = np.array([0, 120, 70])
+        upper_red = np.array([10, 255, 255])
+        mask = cv2.inRange(hsv, lower_red, upper_red)
+
+        # Find contours
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if contours:
+            largest = max(contours, key=cv2.contourArea)
+            x, y, w, h = cv2.boundingRect(largest)
+            self.get_logger().info(f'🔴 Red object detected at ({x}, {y})')
+
+    def depth_callback(self, msg):
+        # Convert depth image
+        depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+
+        # Get distance to center point
+        height, width = depth_image.shape
+        center_depth = depth_image[height//2, width//2]
+
+        self.get_logger().info(f'📏 Center distance: {center_depth/1000:.2f}m')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = DepthProcessor()
+    rclpy.spin(node)
+    rclpy.shutdown()
+```
+
+## 3. IMU: The Robot's Inner Ear
+
+### What is an IMU?
+
+An **Inertial Measurement Unit** combines:
+1. **Accelerometer**: Measures linear acceleration (including gravity)
+2. **Gyroscope**: Measures angular velocity (rotation rate)
+3. **Magnetometer** (optional): Measures magnetic field (compass)
+
+### Why IMUs Matter for Humanoids
+
+Bipedal robots (humanoids) face constant balance challenges:
+- **Static Balance**: Standing still without falling
+- **Dynamic Balance**: Walking while maintaining stability
+- **Fall Detection**: Detecting when balance is lost
+
+### IMU Data Interpretation
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Imu
+import numpy as np
+
+class ImuMonitor(Node):
+    def __init__(self):
+        super().__init__('imu_monitor')
+        self.subscription = self.create_subscription(
+            Imu, '/imu/data', self.imu_callback, 10
+        )
+        self.g = 9.81  # Gravity constant
+
+    def imu_callback(self, msg):
+        # Extract linear acceleration (m/s²)
+        accel = msg.linear_acceleration
+        accel_magnitude = np.sqrt(accel.x**2 + accel.y**2 + accel.z**2)
+
+        # Extract angular velocity (rad/s)
+        gyro = msg.angular_velocity
+        rotation_rate = np.sqrt(gyro.x**2 + gyro.y**2 + gyro.z**2)
+
+        # Extract orientation (quaternion)
+        orientation = msg.orientation
+
+        # Convert quaternion to Euler angles (roll, pitch, yaw)
+        roll, pitch, yaw = self.quaternion_to_euler(orientation)
+
+        # Safety checks
+        if abs(np.degrees(pitch)) > 30:
+            self.get_logger().warn(f'⚠️ Excessive pitch: {np.degrees(pitch):.1f}°')
+
+        if rotation_rate > 3.0:  # 3 rad/s threshold
+            self.get_logger().warn(f'⚠️ High rotation rate: {rotation_rate:.2f} rad/s')
+
+        self.get_logger().info(
+            f'IMU - Roll: {np.degrees(roll):.1f}° | '
+            f'Pitch: {np.degrees(pitch):.1f}° | '
+            f'Yaw: {np.degrees(yaw):.1f}°'
+        )
+
+    def quaternion_to_euler(self, q):
+        """Convert quaternion to Euler angles (roll, pitch, yaw)"""
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (q.w * q.x + q.y * q.z)
+        cosr_cosp = 1 - 2 * (q.x**2 + q.y**2)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+        # Pitch (y-axis rotation)
+        sinp = 2 * (q.w * q.y - q.z * q.x)
+        pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
+
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y**2 + q.z**2)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ImuMonitor()
+    rclpy.spin(node)
+    rclpy.shutdown()
+```
+
+<RobotStatus status="online" label="IMU Calibrated" />
+
+## 4. Force/Torque Sensors: The Sense of Touch
+
+### Gripper Force Control
+
+Humanoid robots must grasp objects with appropriate force:
+- **Too weak**: Object slips
+- **Too strong**: Object breaks
+
+### Force Feedback Loop
+
+```python
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import WrenchStamped
+from std_msgs.msg import Float32
+
+class GripperController(Node):
+    def __init__(self):
+        super().__init__('gripper_controller')
+
+        # Subscribe to force/torque sensor
+        self.ft_sub = self.create_subscription(
+            WrenchStamped, '/gripper/force_torque', self.force_callback, 10
+        )
+
+        # Publish grip command
+        self.grip_pub = self.create_publisher(Float32, '/gripper/command', 10)
+
+        # Grip parameters
+        self.target_force = 5.0  # Newtons
+        self.max_force = 20.0    # Safety limit
+        self.current_grip = 0.0  # 0-100%
+
+    def force_callback(self, msg):
+        # Extract force along gripper axis (usually Z)
+        force_z = msg.wrench.force.z
+
+        # PID-like control (simplified)
+        error = self.target_force - abs(force_z)
+
+        # Adjust grip strength
+        if error > 0.5:  # Need more force
+            self.current_grip = min(100.0, self.current_grip + 2.0)
+        elif error < -0.5:  # Too much force
+            self.current_grip = max(0.0, self.current_grip - 2.0)
+
+        # Safety check
+        if abs(force_z) > self.max_force:
+            self.get_logger().error('🚨 Force limit exceeded! Opening gripper.')
+            self.current_grip = 0.0
+
+        # Publish command
+        cmd = Float32()
+        cmd.data = self.current_grip
+        self.grip_pub.publish(cmd)
+
+        self.get_logger().info(
+            f'Force: {abs(force_z):.2f}N | Grip: {self.current_grip:.1f}%'
+        )
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = GripperController()
+    rclpy.spin(node)
+    rclpy.shutdown()
+```
+
+## Sensor Fusion: Combining the Senses
+
+### The Robot Kalman Filter
+
+The **Extended Kalman Filter (EKF)** combines noisy sensor data:
+
+```python
+import numpy as np
+from filterpy.kalman import ExtendedKalmanFilter
+
+class RobotEKF:
+    def __init__(self):
+        self.ekf = ExtendedKalmanFilter(dim_x=6, dim_z=3)
+        # State: [x, y, theta, vx, vy, omega]
+        # Measurement: [x_gps, y_gps, theta_compass]
+
+    def predict_position(self, dt):
+        """Use IMU and wheel odometry to predict next state"""
+        # Prediction step (dead reckoning)
+        self.ekf.predict()
+
+    def update_with_lidar(self, scan_data):
+        """Correct prediction using LiDAR-based localization"""
+        # Update step (correction)
+        self.ekf.update(scan_data)
+```
+
+:::tip Best Practice
+**Never trust a single sensor**. Always fuse multiple sources:
+- Cameras can be fooled by lighting
+- LiDAR struggles with glass
+- IMUs drift over time
+- GPS fails indoors
+
+Combining them creates a robust perception system.
+:::
+
+## Hardware Recommendations
+
+### Beginner Kit (~$700)
+- **Intel RealSense D435i**: RGB-D camera with IMU ($349)
+- **Hokuyo URG-04LX**: 2D LiDAR ($900) or **RPLiDAR A1** ($99)
+- **BNO055 IMU**: 9-DOF sensor ($35)
+- **NVIDIA Jetson Orin Nano**: Edge AI computer ($249)
+
+### Professional Setup (~$5,000)
+- **Velodyne Puck Lite**: 3D LiDAR ($4,500)
+- **ZED 2i**: Stereo camera with depth + IMU ($450)
+- **Xsens MTi-3**: Industrial IMU ($2,500)
+- **ATI Nano17**: Force/torque sensor ($2,000)
+
+## Summary
+
+Sensor systems are the foundation of Physical AI:
+
+1. **LiDAR** provides spatial awareness for navigation
+2. **Cameras** enable visual perception and object recognition
+3. **IMUs** maintain balance and orientation
+4. **Force sensors** enable safe manipulation
+
+In Chapter 3, we'll integrate these sensors with ROS 2 to build a complete perception pipeline.
+
+---
+
+<ChatRAG
+  context="sensors, LiDAR, cameras, IMU, force sensors, ROS 2"
+  placeholder="Ask about sensor selection, calibration, or ROS 2 integration..."
+  useRealAPI={true}
+  messageLimit={10}
+  resetLimitDaily={true}
+/>
+
+## Practice Exercises
+
+1. **LiDAR Obstacle Detection**: Write a ROS 2 node that stops the robot if an obstacle is detected within 30cm
+2. **Depth Camera Object Tracking**: Track a colored object and report its 3D position
+3. **IMU Balance Monitor**: Create a fall detection system using pitch/roll thresholds
+4. **Sensor Fusion**: Combine IMU + wheel odometry to estimate robot position
+
+## Further Reading
+
+- [ROS 2 Sensor Tutorials](https://docs.ros.org/en/humble/Tutorials.html)
+- [Intel RealSense SDK](https://github.com/IntelRealSense/librealsense)
+- [Velodyne LiDAR ROS Driver](https://github.com/ros-drivers/velodyne)
+- [Robot Localization Package](http://docs.ros.org/en/noetic/api/robot_localization/html/index.html)
