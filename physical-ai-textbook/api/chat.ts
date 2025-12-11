@@ -91,12 +91,54 @@ async function retrieveRelevantChunks(
   query: string,
   context?: string
 ): Promise<Array<{ content: string; source: string; score: number }>> {
-  // In production, this would:
-  // 1. Generate embedding for the query
-  // 2. Search vector database (Pinecone, Weaviate, etc.)
-  // 3. Return top-k most similar chunks
+  // Check if Pinecone is configured
+  const pineconeApiKey = process.env.PINECONE_API_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
 
-  // For now, return mock data with actual content
+  if (!pineconeApiKey || !openaiApiKey) {
+    // Return mock data if not configured
+    return getMockChunks(context);
+  }
+
+  try {
+    // 1. Generate embedding for the query
+    const { OpenAI } = require('openai');
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+
+    const embeddingResponse = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: query,
+      dimensions: 1024, // Match Pinecone index dimension
+    });
+
+    // 2. Search Pinecone vector database
+    const { Pinecone } = require('@pinecone-database/pinecone');
+    const pinecone = new Pinecone({ apiKey: pineconeApiKey });
+    const index = pinecone.index(process.env.PINECONE_INDEX || 'physical-ai-textbook');
+
+    const queryResponse = await index.query({
+      vector: embeddingResponse.data[0].embedding,
+      topK: 5,
+      includeMetadata: true,
+    });
+
+    // 3. Return top-k most similar chunks
+    return queryResponse.matches.map((match: any) => ({
+      content: match.metadata?.content || '',
+      source: match.metadata?.title || 'Unknown',
+      score: match.score || 0,
+    }));
+  } catch (error) {
+    console.error('Error retrieving chunks from Pinecone:', error);
+    // Fallback to mock data on error
+    return getMockChunks(context);
+  }
+}
+
+/**
+ * Get mock chunks (fallback when Pinecone not configured)
+ */
+function getMockChunks(context?: string): Array<{ content: string; source: string; score: number }> {
   const mockChunks = [
     {
       content: `Physical AI refers to AI systems that can understand and interact with the physical world. Unlike traditional AI that operates purely in digital spaces, Physical AI combines:

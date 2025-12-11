@@ -20,6 +20,7 @@ export default async function handler(
 
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
   const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  const hasPinecone = !!process.env.PINECONE_API_KEY;
 
   res.status(200).json({
     status: 'ok',
@@ -29,10 +30,16 @@ export default async function handler(
       anthropic: hasAnthropic ? 'configured' : 'not configured',
       available: hasOpenAI || hasAnthropic,
     },
+    vectorDatabase: {
+      pinecone: hasPinecone ? 'configured' : 'not configured',
+      index: process.env.PINECONE_INDEX || 'not set',
+      environment: process.env.PINECONE_ENVIRONMENT || 'not set',
+    },
     features: {
-      rag: true,
-      vectorSearch: true,
-      embeddings: hasOpenAI, // Using OpenAI embeddings if available
+      rag: hasOpenAI && hasPinecone,
+      vectorSearch: hasPinecone,
+      embeddings: hasOpenAI,
+      fullStack: hasOpenAI && hasPinecone, // True RAG requires both
     },
   });
 }

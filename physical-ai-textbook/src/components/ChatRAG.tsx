@@ -3,9 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 export interface ChatRAGProps {
   context?: string;
   placeholder?: string;
-  useRealAPI?: boolean; // Toggle between real API and simulation
-  messageLimit?: number; // Maximum messages per session (default: unlimited)
-  resetLimitDaily?: boolean; // Reset limit daily (uses localStorage)
+  useRealAPI?: boolean;
+  messageLimit?: number;
+  resetLimitDaily?: boolean;
 }
 
 interface Message {
@@ -17,7 +17,7 @@ interface Message {
 
 export default function ChatRAG({
   context,
-  placeholder = "Ask a question about this chapter...",
+  placeholder = "Ask me anything...",
   useRealAPI = true,
   messageLimit,
   resetLimitDaily = false,
@@ -25,19 +25,14 @@ export default function ChatRAG({
   const STORAGE_KEY = 'chatrag_usage';
   const STORAGE_DATE_KEY = 'chatrag_usage_date';
 
-  // Initialize message count from localStorage if daily reset is enabled
   const getInitialMessageCount = (): number => {
     if (!resetLimitDaily || typeof window === 'undefined') return 0;
-
     const today = new Date().toDateString();
     const storedDate = localStorage.getItem(STORAGE_DATE_KEY);
     const storedCount = localStorage.getItem(STORAGE_KEY);
-
     if (storedDate === today && storedCount) {
       return parseInt(storedCount, 10);
     }
-
-    // Reset if it's a new day
     localStorage.setItem(STORAGE_DATE_KEY, today);
     localStorage.setItem(STORAGE_KEY, '0');
     return 0;
@@ -46,9 +41,7 @@ export default function ChatRAG({
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: messageLimit
-        ? `👋 Hello! I'm your Physical AI learning assistant powered by RAG. You have ${messageLimit} questions available${resetLimitDaily ? ' today' : ' in this session'}. Ask me anything about the content!`
-        : '👋 Hello! I\'m your Physical AI learning assistant powered by RAG (Retrieval-Augmented Generation). Ask me anything about the content!',
+      content: '👋 Hi! I\'m your AI learning assistant. I can help you understand Physical AI concepts, ROS 2, sensors, and more. What would you like to learn about?',
       timestamp: new Date(),
     },
   ]);
@@ -57,6 +50,7 @@ export default function ChatRAG({
   const [apiStatus, setApiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [messageCount, setMessageCount] = useState<number>(getInitialMessageCount());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -66,7 +60,6 @@ export default function ChatRAG({
     scrollToBottom();
   }, [messages]);
 
-  // Check API availability on mount
   useEffect(() => {
     if (useRealAPI) {
       checkAPIAvailability();
@@ -77,9 +70,7 @@ export default function ChatRAG({
 
   const checkAPIAvailability = async () => {
     try {
-      const response = await fetch('/api/health', {
-        method: 'GET',
-      });
+      const response = await fetch('/api/health', { method: 'GET' });
       setApiStatus(response.ok ? 'available' : 'unavailable');
     } catch (error) {
       setApiStatus('unavailable');
@@ -89,11 +80,10 @@ export default function ChatRAG({
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    // Check message limit
     if (messageLimit && messageCount >= messageLimit) {
       const limitMessage: Message = {
         role: 'assistant',
-        content: `⚠️ You've reached your message limit (${messageLimit} questions${resetLimitDaily ? ' for today' : ' for this session'}). ${resetLimitDaily ? 'Come back tomorrow for more questions!' : 'Please refresh the page to start a new session.'}`,
+        content: `You've reached the daily question limit. Come back tomorrow for more questions! 🌟`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, limitMessage]);
@@ -110,11 +100,9 @@ export default function ChatRAG({
     setInput('');
     setIsLoading(true);
 
-    // Increment message count
     const newCount = messageCount + 1;
     setMessageCount(newCount);
 
-    // Update localStorage if daily reset is enabled
     if (resetLimitDaily && typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, newCount.toString());
     }
@@ -124,12 +112,10 @@ export default function ChatRAG({
       let sources: string[] | undefined;
 
       if (useRealAPI && apiStatus === 'available') {
-        // Call real RAG API
         const result = await callRAGAPI(input, context, messages);
         response = result.response;
         sources = result.sources;
       } else {
-        // Fallback to simulated responses
         response = await simulateRAGResponse(input, context);
       }
 
@@ -145,12 +131,13 @@ export default function ChatRAG({
       console.error('Chat error:', error);
       const errorMessage: Message = {
         role: 'assistant',
-        content: '❌ Sorry, I encountered an error. The API might be unavailable. Please try again or check the console for details.',
+        content: '❌ Sorry, I encountered an error. Please try again in a moment.',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      inputRef.current?.focus();
     }
   };
 
@@ -162,142 +149,170 @@ export default function ChatRAG({
   };
 
   return (
-    <div className="tw-bg-gray-800 tw-rounded-lg tw-border tw-border-gray-700 tw-p-4 tw-my-6">
-      <div className="tw-flex tw-items-center tw-justify-between tw-mb-4 tw-border-b tw-border-gray-700 tw-pb-3">
-        <div className="tw-flex tw-items-center">
-          <span className="tw-text-2xl tw-mr-2">🤖</span>
-          <h3 className="tw-text-xl tw-font-bold tw-text-cyber-cyan tw-m-0">
-            AI Assistant {useRealAPI && '(RAG Enabled)'}
-          </h3>
-        </div>
-        <div className="tw-flex tw-items-center tw-gap-4">
-          {messageLimit && (
-            <div className="tw-flex tw-items-center tw-text-xs">
-              <span className="tw-text-gray-400 tw-mr-1">💬</span>
-              <span className={`tw-font-semibold ${
-                messageCount >= messageLimit
-                  ? 'tw-text-red-500'
-                  : messageCount >= messageLimit * 0.8
-                  ? 'tw-text-yellow-500'
-                  : 'tw-text-green-500'
-              }`}>
-                {messageLimit - messageCount}
-              </span>
-              <span className="tw-text-gray-400 tw-ml-1">
-                / {messageLimit} {resetLimitDaily ? 'today' : 'left'}
-              </span>
+    <div className="tw-my-8 tw-mx-auto tw-max-w-4xl">
+      {/* Beautiful Header with Gradient */}
+      <div className="tw-bg-gradient-to-r tw-from-blue-600 tw-via-purple-600 tw-to-pink-600 tw-rounded-t-2xl tw-p-6 tw-shadow-lg">
+        <div className="tw-flex tw-items-center tw-justify-between">
+          <div className="tw-flex tw-items-center tw-gap-3">
+            <div className="tw-bg-white/20 tw-backdrop-blur-sm tw-rounded-full tw-p-3">
+              <span className="tw-text-3xl">🤖</span>
             </div>
-          )}
-          {useRealAPI && (
-            <div className="tw-flex tw-items-center tw-text-xs">
-              <div
-                className={`tw-w-2 tw-h-2 tw-rounded-full tw-mr-2 ${
-                  apiStatus === 'available'
-                    ? 'tw-bg-green-500'
-                    : apiStatus === 'checking'
-                    ? 'tw-bg-yellow-500 tw-animate-pulse'
-                    : 'tw-bg-red-500'
-                }`}
-              />
-              <span className="tw-text-gray-400">
-                {apiStatus === 'available'
-                  ? 'API Connected'
-                  : apiStatus === 'checking'
-                  ? 'Checking...'
-                  : 'Offline Mode'}
-              </span>
+            <div>
+              <h3 className="tw-text-2xl tw-font-bold tw-text-white tw-m-0">
+                AI Learning Assistant
+              </h3>
+              <p className="tw-text-white/80 tw-text-sm tw-m-0 tw-mt-1">
+                {apiStatus === 'available' ? '✨ Powered by RAG' : '💡 Demo Mode'}
+              </p>
             </div>
-          )}
+          </div>
+
+          {/* Status Indicator */}
+          <div className="tw-flex tw-items-center tw-gap-2 tw-bg-white/20 tw-backdrop-blur-sm tw-rounded-full tw-px-4 tw-py-2">
+            <div className={`tw-w-2 tw-h-2 tw-rounded-full ${
+              apiStatus === 'available' ? 'tw-bg-green-400 tw-animate-pulse' :
+              apiStatus === 'checking' ? 'tw-bg-yellow-400 tw-animate-pulse' :
+              'tw-bg-red-400'
+            }`} />
+            <span className="tw-text-white tw-text-sm tw-font-medium">
+              {apiStatus === 'available' ? 'Online' : apiStatus === 'checking' ? 'Connecting...' : 'Offline'}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Messages Container */}
-      <div className="tw-bg-gray-900 tw-rounded-lg tw-p-4 tw-mb-4 tw-max-h-96 tw-overflow-y-auto">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`tw-mb-4 tw-flex ${
-              message.role === 'user' ? 'tw-justify-end' : 'tw-justify-start'
-            }`}
-          >
+      {/* Clean Chat Container */}
+      <div className="tw-bg-white dark:tw-bg-gray-900 tw-rounded-b-2xl tw-shadow-2xl tw-overflow-hidden">
+        {/* Messages Area with Clean Background */}
+        <div className="tw-h-96 tw-overflow-y-auto tw-p-6 tw-space-y-4 tw-bg-gradient-to-b tw-from-gray-50 tw-to-white dark:tw-from-gray-900 dark:tw-to-gray-800">
+          {messages.map((message, index) => (
             <div
-              className={`tw-max-w-3/4 tw-rounded-lg tw-p-3 ${
-                message.role === 'user'
-                  ? 'tw-bg-cyber-cyan tw-text-deep-space'
-                  : 'tw-bg-gray-800 tw-text-gray-200'
+              key={index}
+              className={`tw-flex tw-gap-3 tw-animate-fadeIn ${
+                message.role === 'user' ? 'tw-flex-row-reverse' : 'tw-flex-row'
               }`}
             >
-              <div className="tw-text-sm tw-font-medium tw-mb-1">
-                {message.role === 'user' ? '👤 You' : '🤖 Assistant'}
+              {/* Avatar */}
+              <div className={`tw-flex-shrink-0 tw-w-10 tw-h-10 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-lg tw-shadow-md ${
+                message.role === 'user'
+                  ? 'tw-bg-gradient-to-br tw-from-blue-500 tw-to-purple-600'
+                  : 'tw-bg-gradient-to-br tw-from-purple-500 tw-to-pink-600'
+              }`}>
+                <span>{message.role === 'user' ? '👤' : '🤖'}</span>
               </div>
-              <div className="tw-text-base tw-leading-relaxed tw-whitespace-pre-wrap">
-                {message.content}
-              </div>
-              {message.sources && message.sources.length > 0 && (
-                <div className="tw-mt-2 tw-pt-2 tw-border-t tw-border-gray-700">
-                  <div className="tw-text-xs tw-font-medium tw-mb-1">📚 Sources:</div>
-                  {message.sources.map((source, i) => (
-                    <div key={i} className="tw-text-xs tw-opacity-80">
-                      • {source}
+
+              {/* Message Bubble */}
+              <div className={`tw-flex-1 tw-max-w-2xl ${message.role === 'user' ? 'tw-text-right' : 'tw-text-left'}`}>
+                <div className={`tw-inline-block tw-rounded-2xl tw-px-5 tw-py-3 tw-shadow-lg ${
+                  message.role === 'user'
+                    ? 'tw-bg-gradient-to-br tw-from-blue-500 tw-to-purple-600 tw-text-white'
+                    : 'tw-bg-white dark:tw-bg-gray-800 tw-text-gray-800 dark:tw-text-gray-100 tw-border tw-border-gray-200 dark:tw-border-gray-700'
+                }`}>
+                  <div className="tw-text-base tw-leading-relaxed tw-whitespace-pre-wrap">
+                    {message.content}
+                  </div>
+
+                  {/* Sources */}
+                  {message.sources && message.sources.length > 0 && (
+                    <div className="tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-300 dark:tw-border-gray-600">
+                      <div className="tw-text-xs tw-font-semibold tw-mb-1 tw-opacity-75">📚 Sources:</div>
+                      <div className="tw-space-y-1">
+                        {message.sources.map((source, i) => (
+                          <div key={i} className="tw-text-xs tw-opacity-75">
+                            • {source}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
                 </div>
+
+                {/* Timestamp */}
+                <div className={`tw-text-xs tw-text-gray-500 dark:tw-text-gray-400 tw-mt-1 tw-px-2 ${
+                  message.role === 'user' ? 'tw-text-right' : 'tw-text-left'
+                }`}>
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Loading Indicator */}
+          {isLoading && (
+            <div className="tw-flex tw-gap-3 tw-animate-fadeIn">
+              <div className="tw-flex-shrink-0 tw-w-10 tw-h-10 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-lg tw-shadow-md tw-bg-gradient-to-br tw-from-purple-500 tw-to-pink-600">
+                <span>🤖</span>
+              </div>
+              <div className="tw-bg-white dark:tw-bg-gray-800 tw-rounded-2xl tw-px-5 tw-py-3 tw-shadow-lg tw-border tw-border-gray-200 dark:tw-border-gray-700">
+                <div className="tw-flex tw-items-center tw-gap-2">
+                  <div className="tw-flex tw-gap-1">
+                    <div className="tw-w-2 tw-h-2 tw-bg-purple-500 tw-rounded-full tw-animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="tw-w-2 tw-h-2 tw-bg-purple-500 tw-rounded-full tw-animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="tw-w-2 tw-h-2 tw-bg-purple-500 tw-rounded-full tw-animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                  <span className="tw-text-sm tw-text-gray-600 dark:tw-text-gray-400">Thinking...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Beautiful Input Area */}
+        <div className="tw-bg-white dark:tw-bg-gray-800 tw-border-t tw-border-gray-200 dark:tw-border-gray-700 tw-p-4">
+          <div className="tw-flex tw-gap-3 tw-items-end">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={messageLimit && messageCount >= messageLimit ? 'Daily limit reached' : placeholder}
+              disabled={isLoading || (messageLimit !== undefined && messageCount >= messageLimit)}
+              className="tw-flex-1 tw-bg-gray-100 dark:tw-bg-gray-700 tw-text-gray-900 dark:tw-text-white tw-rounded-xl tw-px-4 tw-py-3 tw-text-base focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-purple-500 tw-transition-all disabled:tw-opacity-50 disabled:tw-cursor-not-allowed tw-border-0"
+            />
+            <button
+              onClick={handleSend}
+              disabled={isLoading || !input.trim() || (messageLimit !== undefined && messageCount >= messageLimit)}
+              className="tw-bg-gradient-to-r tw-from-blue-600 tw-via-purple-600 tw-to-pink-600 tw-text-white tw-font-semibold tw-px-6 tw-py-3 tw-rounded-xl hover:tw-shadow-lg tw-transition-all tw-transform hover:tw-scale-105 disabled:tw-opacity-50 disabled:tw-cursor-not-allowed disabled:tw-transform-none tw-border-0"
+            >
+              {isLoading ? (
+                <span className="tw-flex tw-items-center tw-gap-2">
+                  <svg className="tw-animate-spin tw-h-5 tw-w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="tw-opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="tw-opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+              ) : (
+                <span className="tw-flex tw-items-center tw-gap-2">
+                  Send
+                  <svg className="tw-w-5 tw-h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </span>
               )}
-              <div className="tw-text-xs tw-opacity-70 tw-mt-1">
-                {message.timestamp.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </div>
-            </div>
+            </button>
           </div>
-        ))}
-        {isLoading && (
-          <div className="tw-flex tw-justify-start tw-mb-4">
-            <div className="tw-bg-gray-800 tw-text-gray-200 tw-rounded-lg tw-p-3">
-              <div className="tw-flex tw-items-center tw-space-x-2">
-                <div className="tw-animate-pulse">🤖 Assistant</div>
-                <div className="tw-flex tw-space-x-1">
-                  <span className="tw-animate-bounce">.</span>
-                  <span className="tw-animate-bounce" style={{ animationDelay: '0.1s' }}>.</span>
-                  <span className="tw-animate-bounce" style={{ animationDelay: '0.2s' }}>.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      {/* Input Area */}
-      <div className="tw-flex tw-gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder={
-            messageLimit && messageCount >= messageLimit
-              ? `Limit reached (${messageLimit} messages)`
-              : placeholder
+      {/* Add fade-in animation */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
           }
-          disabled={isLoading || (messageLimit !== undefined && messageCount >= messageLimit)}
-          className="tw-flex-1 tw-bg-gray-900 tw-text-gray-200 tw-border tw-border-gray-700 tw-rounded-lg tw-px-4 tw-py-2 focus:tw-outline-none focus:tw-border-cyber-cyan tw-transition-colors disabled:tw-opacity-50"
-        />
-        <button
-          onClick={handleSend}
-          disabled={isLoading || !input.trim() || (messageLimit !== undefined && messageCount >= messageLimit)}
-          className="tw-bg-cyber-cyan tw-text-deep-space tw-font-semibold tw-px-6 tw-py-2 tw-rounded-lg hover:tw-bg-opacity-90 tw-transition-all disabled:tw-opacity-50 disabled:tw-cursor-not-allowed"
-        >
-          {isLoading ? 'Thinking...' : messageLimit && messageCount >= messageLimit ? 'Limit Reached' : 'Send'}
-        </button>
-      </div>
-
-      <div className="tw-text-xs tw-text-gray-500 tw-mt-2 tw-text-center">
-        💡 {useRealAPI && apiStatus === 'available'
-          ? 'Powered by RAG - answers are generated from the textbook content'
-          : 'Demo mode - using keyword-based responses'}
-      </div>
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .tw-animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
@@ -344,7 +359,6 @@ async function simulateRAGResponse(question: string, context?: string): Promise<
 
   const lowercaseQuestion = question.toLowerCase();
 
-  // Import from original Chat component
   if (lowercaseQuestion.includes('lidar')) {
     return '🔍 **LiDAR (Light Detection and Ranging)** works by emitting laser pulses and measuring the time it takes for them to bounce back. Distance = (Speed of Light × Time) / 2.\n\nFor robots:\n- Creates 3D maps\n- Detects obstacles up to 100m\n- Essential for navigation\n\nTypes: 2D LiDAR (single plane) vs 3D LiDAR (full point clouds)';
   }
@@ -357,5 +371,5 @@ async function simulateRAGResponse(question: string, context?: string): Promise<
     return '🤖 **ROS 2** is middleware connecting robot components:\n- **Nodes**: Independent processes\n- **Topics**: Pub/sub messaging\n- **Services**: Request/response\n- **Actions**: Long tasks with feedback\n\nBuilt on DDS for real-time, distributed communication.';
   }
 
-  return `🤔 I'm running in demo mode without API access. For real RAG responses, set up:\n\n1. OpenAI or Anthropic API key\n2. Add to .env file\n3. Redeploy\n\nMeanwhile, try asking about "LiDAR", "IMU", or "ROS 2"!`;
+  return `I'm currently running in demo mode. For real AI-powered responses with sources from the textbook, the RAG system needs to be connected.\n\nMeanwhile, try asking about "LiDAR", "IMU", or "ROS 2" for simulated responses!`;
 }
