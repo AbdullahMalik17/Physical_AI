@@ -1,0 +1,740 @@
+---
+id: chapter4-ros2-packages
+title: "Chapter 4: Building ROS 2 Packages with Python"
+sidebar_position: 4
+description: "Learn to create ROS 2 packages, define custom messages and services, manage parameters, and write launch files"
+keywords: [ROS 2, packages, setup.py, package.xml, custom messages, launch files, colcon]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatPlaceholder from '@site/src/components/ChatPlaceholder';
+
+# Chapter 4: Building ROS 2 Packages with Python
+
+<RobotStatus status="online" label="Package Builder" />
+
+## Introduction
+
+In ROS 2, **packages** are the fundamental unit of organization. A package contains nodes, libraries, configuration files, and other resources grouped together for a specific purpose. In this chapter, you'll learn to build production-ready ROS 2 packages from scratch.
+
+## Understanding Package Structure
+
+A typical Python ROS 2 package follows this structure:
+
+```
+my_robot_package/
+├── package.xml           # Package metadata and dependencies
+├── setup.py              # Python package configuration
+├── setup.cfg             # Python package settings
+├── resource/             # Package marker file
+│   └── my_robot_package
+├── my_robot_package/     # Python source code
+│   ├── __init__.py
+│   ├── sensor_node.py
+│   └── controller_node.py
+├── launch/               # Launch files
+│   └── robot_launch.py
+├── config/               # Configuration files (YAML)
+│   └── params.yaml
+├── msg/                  # Custom message definitions
+│   └── SensorData.msg
+├── srv/                  # Custom service definitions
+│   └── SetMode.srv
+├── test/                 # Unit tests
+│   └── test_sensor_node.py
+└── README.md
+```
+
+## Creating a Package from Scratch
+
+### Step 1: Initialize the Package
+
+Use the ROS 2 package creation tool:
+
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_python my_robot_package \
+    --dependencies rclpy std_msgs sensor_msgs geometry_msgs
+```
+
+This creates the basic package structure with specified dependencies.
+
+### Step 2: Understanding package.xml
+
+**Example 1: Complete package.xml**
+
+```xml
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>my_robot_package</name>
+  <version>1.0.0</version>
+  <description>A comprehensive robot control package for Physical AI</description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- Build dependencies -->
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <!-- Runtime dependencies -->
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <!-- For custom messages -->
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- Test dependencies -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+```
+
+**Key elements**:
+- `<depend>`: Runtime dependencies
+- `<buildtool_depend>`: Build-time tools
+- `<test_depend>`: Testing frameworks
+- `<member_of_group>`: For custom message generation
+
+### Step 3: Configuring setup.py
+
+**Example 2: Complete setup.py**
+
+```python
+from setuptools import setup
+import os
+from glob import glob
+
+package_name = 'my_robot_package'
+
+setup(
+    name=package_name,
+    version='1.0.0',
+    packages=[package_name],
+    data_files=[
+        # Install package marker
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+
+        # Install package.xml
+        ('share/' + package_name, ['package.xml']),
+
+        # Install launch files
+        (os.path.join('share', package_name, 'launch'),
+            glob('launch/*.py')),
+
+        # Install config files
+        (os.path.join('share', package_name, 'config'),
+            glob('config/*.yaml')),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='Your Name',
+    maintainer_email='you@example.com',
+    description='A comprehensive robot control package',
+    license='Apache-2.0',
+    tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'sensor_node = my_robot_package.sensor_node:main',
+            'controller_node = my_robot_package.controller_node:main',
+            'parameter_server = my_robot_package.parameter_server:main',
+        ],
+    },
+)
+```
+
+**Key sections**:
+- `data_files`: Installs launch files, configs to the share directory
+- `entry_points`: Creates executable scripts for nodes
+
+### Step 4: setup.cfg
+
+**Example 3: setup.cfg**
+
+```ini
+[develop]
+script_dir=$base/lib/my_robot_package
+
+[install]
+install_scripts=$base/lib/my_robot_package
+```
+
+This ensures executables are installed in the correct location.
+
+## Creating Custom Messages
+
+Custom messages allow you to define domain-specific data structures.
+
+### Step 1: Define Message File
+
+**Example 4: Custom Sensor Message (msg/SensorData.msg)**
+
+```
+# Header with timestamp and frame
+std_msgs/Header header
+
+# Sensor identification
+string sensor_id
+string sensor_type
+
+# Raw sensor readings
+float64 temperature      # Celsius
+float64 pressure         # Pascals
+float64 humidity         # Percentage (0-100)
+
+# Position data (if applicable)
+geometry_msgs/Point position
+
+# Status flags
+bool is_calibrated
+bool is_online
+
+# Metadata
+uint32 reading_count
+```
+
+**Field types available**:
+- Primitives: `bool`, `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`, `float32`, `float64`, `string`
+- Arrays: `float64[]` (dynamic), `float64[10]` (fixed)
+- Other messages: `std_msgs/Header`, `geometry_msgs/Point`
+
+### Step 2: Update CMakeLists.txt (for message generation)
+
+For Python packages with custom messages, you need a minimal `CMakeLists.txt`:
+
+**Example 5: CMakeLists.txt for Custom Messages**
+
+```cmake
+cmake_minimum_required(VERSION 3.5)
+project(my_robot_package)
+
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+
+# Declare message files
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/SensorData.msg"
+  "srv/SetMode.srv"
+  DEPENDENCIES std_msgs geometry_msgs
+)
+
+ament_package()
+```
+
+### Step 3: Using Custom Messages in Code
+
+**Example 6: Publishing Custom Messages**
+
+```python
+import rclpy
+from rclpy.node import Node
+from my_robot_package.msg import SensorData
+from geometry_msgs.msg import Point
+
+
+class SensorPublisher(Node):
+    def __init__(self):
+        super().__init__('sensor_publisher')
+
+        self.publisher_ = self.create_publisher(SensorData, 'sensor_data', 10)
+        self.timer = self.create_timer(1.0, self.publish_sensor_data)
+
+        self.reading_count = 0
+
+        self.get_logger().info('Sensor Publisher started')
+
+    def publish_sensor_data(self):
+        msg = SensorData()
+
+        # Fill header
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'sensor_frame'
+
+        # Sensor identification
+        msg.sensor_id = 'TEMP_001'
+        msg.sensor_type = 'BME280'
+
+        # Simulated readings
+        msg.temperature = 22.5 + (self.reading_count % 10) * 0.1
+        msg.pressure = 101325.0
+        msg.humidity = 45.0
+
+        # Position
+        msg.position = Point()
+        msg.position.x = 1.0
+        msg.position.y = 0.5
+        msg.position.z = 0.2
+
+        # Status
+        msg.is_calibrated = True
+        msg.is_online = True
+
+        # Metadata
+        msg.reading_count = self.reading_count
+
+        self.publisher_.publish(msg)
+        self.get_logger().info(
+            f'Published: Temp={msg.temperature:.2f}°C, Count={msg.reading_count}'
+        )
+
+        self.reading_count += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SensorPublisher()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Creating Custom Services
+
+Services define request-response interactions.
+
+### Step 1: Define Service File
+
+**Example 7: Custom Service (srv/SetMode.srv)**
+
+```
+# Request
+string mode          # Mode name: "idle", "active", "calibration"
+bool enable_logging
+
+---
+
+# Response
+bool success
+string message
+float64 transition_time  # Time taken to switch modes (seconds)
+```
+
+The `---` separator divides request (top) from response (bottom).
+
+### Step 2: Using Custom Services
+
+```python
+import rclpy
+from rclpy.node import Node
+from my_robot_package.srv import SetMode
+
+
+class ModeServer(Node):
+    def __init__(self):
+        super().__init__('mode_server')
+
+        self.current_mode = 'idle'
+
+        self.srv = self.create_service(
+            SetMode,
+            'set_mode',
+            self.set_mode_callback
+        )
+
+        self.get_logger().info('Mode Server ready')
+
+    def set_mode_callback(self, request, response):
+        import time
+        start_time = time.time()
+
+        valid_modes = ['idle', 'active', 'calibration']
+
+        if request.mode in valid_modes:
+            self.current_mode = request.mode
+
+            if request.enable_logging:
+                self.get_logger().info(f'Logging enabled for mode: {request.mode}')
+
+            response.success = True
+            response.message = f'Mode changed to: {request.mode}'
+        else:
+            response.success = False
+            response.message = f'Invalid mode: {request.mode}. Valid: {valid_modes}'
+
+        response.transition_time = time.time() - start_time
+
+        return response
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ModeServer()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Parameter Management
+
+### YAML Configuration Files
+
+**Example 8: Parameter File (config/params.yaml)**
+
+```yaml
+sensor_node:
+  ros__parameters:
+    # Sensor configuration
+    sensor_id: "TEMP_001"
+    sensor_type: "BME280"
+    publish_rate: 10.0  # Hz
+
+    # Calibration parameters
+    temperature_offset: 0.0
+    pressure_offset: 0.0
+    humidity_offset: 0.0
+
+    # Thresholds
+    temperature_min: -40.0
+    temperature_max: 85.0
+
+    # Feature flags
+    enable_calibration: true
+    enable_filtering: false
+    log_level: "info"
+
+controller_node:
+  ros__parameters:
+    # Control parameters
+    max_velocity: 1.5  # m/s
+    max_acceleration: 0.5  # m/s^2
+    control_frequency: 50.0  # Hz
+
+    # Safety limits
+    emergency_stop_distance: 0.3  # meters
+    obstacle_threshold: 0.5  # meters
+```
+
+### Loading Parameters in Nodes
+
+```python
+import rclpy
+from rclpy.node import Node
+
+
+class ParameterizedNode(Node):
+    def __init__(self):
+        super().__init__('sensor_node')
+
+        # Declare parameters with defaults
+        self.declare_parameter('sensor_id', 'DEFAULT_SENSOR')
+        self.declare_parameter('publish_rate', 10.0)
+        self.declare_parameter('temperature_offset', 0.0)
+        self.declare_parameter('enable_calibration', True)
+
+        # Get parameter values
+        self.sensor_id = self.get_parameter('sensor_id').value
+        self.publish_rate = self.get_parameter('publish_rate').value
+        self.temp_offset = self.get_parameter('temperature_offset').value
+        self.calibration_enabled = self.get_parameter('enable_calibration').value
+
+        self.get_logger().info(f'Sensor ID: {self.sensor_id}')
+        self.get_logger().info(f'Publish Rate: {self.publish_rate} Hz')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ParameterizedNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Loading params from YAML at launch**:
+```bash
+ros2 run my_robot_package sensor_node --ros-args --params-file config/params.yaml
+```
+
+## Launch Files
+
+Launch files start multiple nodes with configurations.
+
+**Example 9: Python Launch File (launch/robot_launch.py)**
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.substitutions import LaunchConfiguration
+from ament_index_python.packages import get_package_share_directory
+import os
+
+
+def generate_launch_description():
+    # Get package directory
+    pkg_dir = get_package_share_directory('my_robot_package')
+    config_file = os.path.join(pkg_dir, 'config', 'params.yaml')
+
+    # Declare launch arguments
+    use_sim_time_arg = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation time'
+    )
+
+    log_level_arg = DeclareLaunchArgument(
+        'log_level',
+        default_value='info',
+        description='Logging level'
+    )
+
+    # Launch configuration
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    log_level = LaunchConfiguration('log_level')
+
+    # Node 1: Sensor Publisher
+    sensor_node = Node(
+        package='my_robot_package',
+        executable='sensor_node',
+        name='sensor_node',
+        output='screen',
+        parameters=[
+            config_file,
+            {'use_sim_time': use_sim_time}
+        ],
+        arguments=['--ros-args', '--log-level', log_level]
+    )
+
+    # Node 2: Controller Node
+    controller_node = Node(
+        package='my_robot_package',
+        executable='controller_node',
+        name='controller_node',
+        output='screen',
+        parameters=[
+            config_file,
+            {'use_sim_time': use_sim_time}
+        ],
+        remappings=[
+            ('/cmd_vel', '/robot/cmd_vel'),  # Topic remapping
+        ]
+    )
+
+    # Node 3: Parameter Server
+    parameter_server = Node(
+        package='my_robot_package',
+        executable='parameter_server',
+        name='parameter_server',
+        output='screen'
+    )
+
+    # Execute RViz (visualization tool)
+    rviz_node = ExecuteProcess(
+        cmd=['rviz2'],
+        output='screen'
+    )
+
+    return LaunchDescription([
+        use_sim_time_arg,
+        log_level_arg,
+        sensor_node,
+        controller_node,
+        parameter_server,
+        # rviz_node,  # Uncomment to launch RViz
+    ])
+```
+
+**Running the launch file**:
+```bash
+ros2 launch my_robot_package robot_launch.py
+
+# With arguments
+ros2 launch my_robot_package robot_launch.py use_sim_time:=true log_level:=debug
+```
+
+## Building and Testing the Package
+
+### Build with colcon
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select my_robot_package
+
+# Build with verbose output
+colcon build --packages-select my_robot_package --event-handlers console_direct+
+```
+
+### Source the workspace
+
+```bash
+source ~/ros2_ws/install/setup.bash
+```
+
+### Run nodes
+
+```bash
+# Run individual nodes
+ros2 run my_robot_package sensor_node
+
+# Run with parameters
+ros2 run my_robot_package sensor_node --ros-args -p sensor_id:=TEMP_002
+
+# Run launch file
+ros2 launch my_robot_package robot_launch.py
+```
+
+### Testing
+
+**Example 10: Unit Test (test/test_sensor_node.py)**
+
+```python
+import unittest
+import rclpy
+from rclpy.node import Node
+from my_robot_package.msg import SensorData
+
+
+class TestSensorNode(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        rclpy.init()
+
+    @classmethod
+    def tearDownClass(cls):
+        rclpy.shutdown()
+
+    def test_sensor_message_creation(self):
+        """Test that SensorData message can be created"""
+        msg = SensorData()
+        msg.sensor_id = 'TEST_001'
+        msg.temperature = 25.0
+
+        self.assertEqual(msg.sensor_id, 'TEST_001')
+        self.assertEqual(msg.temperature, 25.0)
+
+    def test_parameter_loading(self):
+        """Test parameter declaration and retrieval"""
+        node = Node('test_node')
+
+        node.declare_parameter('test_param', 42)
+        value = node.get_parameter('test_param').value
+
+        self.assertEqual(value, 42)
+
+        node.destroy_node()
+
+
+if __name__ == '__main__':
+    unittest.main()
+```
+
+**Run tests**:
+```bash
+colcon test --packages-select my_robot_package
+colcon test-result --verbose
+```
+
+## Best Practices
+
+### 1. Package Organization
+- **One package per robot/sensor**: Keep related nodes together
+- **Separate interfaces**: Custom messages in separate `_interfaces` packages
+- **Clear naming**: `<robot>_<function>_package` (e.g., `turtlebot_navigation`)
+
+### 2. Dependencies
+- **Minimize dependencies**: Only include what you need
+- **Use standard messages**: Prefer `std_msgs`, `sensor_msgs`, `geometry_msgs` when possible
+- **Version pinning**: Specify dependency versions for reproducibility
+
+### 3. Configuration
+- **Externalize parameters**: Never hardcode values
+- **YAML files**: Use for default configurations
+- **Launch arguments**: Allow runtime customization
+
+### 4. Documentation
+- **README.md**: Package purpose, dependencies, usage examples
+- **Docstrings**: Document classes and functions
+- **Launch file comments**: Explain node configurations
+
+## Package Directory Tree (Complete Example)
+
+```
+my_robot_package/
+├── package.xml              # ✅ Dependencies and metadata
+├── setup.py                 # ✅ Python package config, entry points
+├── setup.cfg                # ✅ Install paths
+├── CMakeLists.txt           # ✅ For custom messages/services
+├── resource/
+│   └── my_robot_package     # ✅ Package marker
+├── my_robot_package/        # ✅ Python source code
+│   ├── __init__.py
+│   ├── sensor_node.py       # ✅ Sensor publisher
+│   ├── controller_node.py   # ✅ Controller logic
+│   └── parameter_server.py  # ✅ Parameter management
+├── msg/                     # ✅ Custom messages
+│   └── SensorData.msg
+├── srv/                     # ✅ Custom services
+│   └── SetMode.srv
+├── launch/                  # ✅ Launch files
+│   └── robot_launch.py
+├── config/                  # ✅ Configuration files
+│   └── params.yaml
+├── test/                    # ✅ Unit tests
+│   └── test_sensor_node.py
+└── README.md                # ✅ Documentation
+```
+
+## Key Takeaways
+
+1. **Packages are fundamental**: All ROS 2 code lives in packages
+2. **package.xml defines dependencies**: Build and runtime requirements
+3. **setup.py creates executables**: Entry points for nodes
+4. **Custom messages = structured data**: Domain-specific communication
+5. **YAML files = configuration**: Externalize parameters
+6. **Launch files = orchestration**: Start complex multi-node systems
+7. **colcon builds everything**: Standard build tool for ROS 2
+8. **Testing is essential**: Write unit tests for reliability
+
+<RobotStatus status="simulating" label="Building Package" />
+
+## Next Steps
+
+In Chapter 5, we'll dive deep into ROS 2 communication patterns—learning when to use topics vs services vs actions, and how to build robust multi-node systems with proper error handling and threading.
+
+<ChatPlaceholder message="Ask me about package structure, custom messages, launch files, or configuration!" />
+
+---
+
+**Further Reading**:
+- [ROS 2 Package Tutorial](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html)
+- [colcon Documentation](https://colcon.readthedocs.io/)
+- [rosidl (Interface Definition)](https://github.com/ros2/rosidl)

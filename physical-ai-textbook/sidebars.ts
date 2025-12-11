@@ -21,13 +21,14 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Part 1: Fundamentals',
+      label: 'Part 1: ROS 2 Fundamentals',
       collapsed: false,
       items: [
         'part1-fundamentals/chapter1-embodied-intelligence',
         'part1-fundamentals/chapter2-sensor-systems',
-        'part1-fundamentals/chapter3-motor-control',
-        'part1-fundamentals/chapter4-simulation',
+        'part1-fundamentals/chapter3-ros2-architecture',
+        'part1-fundamentals/chapter4-ros2-packages',
+        'part1-fundamentals/chapter5-communication-patterns',
       ],
     },
     // Part 2 and 3 will be added in future milestones

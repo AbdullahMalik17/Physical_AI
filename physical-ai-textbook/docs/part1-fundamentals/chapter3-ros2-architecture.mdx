@@ -1,0 +1,663 @@
+---
+id: chapter3-ros2-architecture
+title: "Chapter 3: ROS 2 Architecture & Core Concepts"
+sidebar_position: 3
+description: "Learn ROS 2 architecture, DDS middleware, nodes, topics, services, actions, and QoS profiles"
+keywords: [ROS 2, DDS, middleware, nodes, topics, services, actions, QoS, rclpy]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatPlaceholder from '@site/src/components/ChatPlaceholder';
+
+# Chapter 3: ROS 2 Architecture & Core Concepts
+
+<RobotStatus status="online" label="ROS 2 System" />
+
+## Introduction
+
+ROS 2 (Robot Operating System 2) represents a complete architectural redesign of the original ROS, addressing the limitations of ROS 1 and embracing modern middleware standards. In this chapter, we'll explore the core concepts that make ROS 2 the foundation for building sophisticated robotic systems.
+
+## ROS 2 vs ROS 1: A New Era
+
+The transition from ROS 1 to ROS 2 was driven by critical needs in production robotics: real-time performance, security, multi-robot systems, and commercial deployment.
+
+| Feature | ROS 1 | ROS 2 |
+|---------|-------|-------|
+| **Middleware** | Custom TCPROS/UDPROS | DDS (OMG Standard) |
+| **Master Node** | Required (single point of failure) | Not required (decentralized) |
+| **Real-time Support** | Limited | Native support via DDS |
+| **Security** | None | DDS Security (encryption, authentication) |
+| **Multi-platform** | Linux only | Linux, Windows, macOS |
+| **Communication** | TCP/UDP custom protocol | DDS with QoS profiles |
+| **Build System** | catkin | ament/colcon |
+| **Python Support** | Python 2/3 | Python 3 only |
+| **Lifecycle Management** | Manual | Managed nodes (standardized) |
+
+**Why it matters for Physical AI**: ROS 2's real-time capabilities and security make it suitable for humanoid robots operating in human environments, where safety and deterministic behavior are critical.
+
+## The DDS Foundation
+
+ROS 2 is built on **DDS (Data Distribution Service)**, an OMG (Object Management Group) standard for real-time, scalable, peer-to-peer communication.
+
+### Key DDS Concepts
+
+1. **Data-Centric Architecture**: Focuses on the data itself, not the endpoints
+2. **Publish-Subscribe Pattern**: Decoupled communication
+3. **Discovery Protocol**: Automatic participant discovery (no central broker)
+4. **QoS Policies**: Fine-grained control over reliability, durability, and more
+
+### Available DDS Implementations
+
+- **Fast DDS** (eProsima) - Default in ROS 2 Humble
+- **CycloneDDS** (Eclipse) - High performance alternative
+- **Connext DDS** (RTI) - Commercial, ultra-reliable
+
+You can switch DDS implementations by setting the `RMW_IMPLEMENTATION` environment variable:
+
+```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+```
+
+## Core Architectural Components
+
+### 1. Nodes: The Building Blocks
+
+A **node** is a process that performs computation. ROS 2 systems are composed of many nodes working together.
+
+**Example 1: Creating Your First Node (Minimal Publisher)**
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class MinimalPublisher(Node):
+    def __init__(self):
+        super().__init__('minimal_publisher')
+
+        # Create publisher: topic name, message type, queue size
+        self.publisher_ = self.create_publisher(String, 'chatter', 10)
+
+        # Create timer: period (seconds), callback function
+        self.timer = self.create_timer(0.5, self.timer_callback)
+        self.i = 0
+
+        self.get_logger().info('Minimal Publisher has been started')
+
+    def timer_callback(self):
+        msg = String()
+        msg.data = f'Hello ROS 2: {self.i}'
+        self.publisher_.publish(msg)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
+        self.i += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MinimalPublisher()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Key concepts demonstrated**:
+- Node inheritance from `rclpy.node.Node`
+- Publisher creation with topic name and message type
+- Timer-based periodic execution
+- Logging with `get_logger()`
+
+### 2. Topics: Asynchronous Message Streams
+
+**Topics** enable many-to-many communication through a publish-subscribe pattern.
+
+**Example 2: Subscriber Node (Listening to Topics)**
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class MinimalSubscriber(Node):
+    def __init__(self):
+        super().__init__('minimal_subscriber')
+
+        # Create subscriber: topic name, message type, callback, queue size
+        self.subscription = self.create_subscription(
+            String,
+            'chatter',
+            self.listener_callback,
+            10
+        )
+
+        self.get_logger().info('Minimal Subscriber has been started')
+
+    def listener_callback(self, msg):
+        self.get_logger().info(f'I heard: "{msg.data}"')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MinimalSubscriber()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Running the nodes**:
+```bash
+# Terminal 1
+python3 minimal_publisher.py
+
+# Terminal 2
+python3 minimal_subscriber.py
+```
+
+### 3. Services: Synchronous Request-Response
+
+**Services** provide synchronous communication for request-response interactions.
+
+**Example 3: Service Server (Add Two Integers)**
+
+```python
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+
+class AddTwoIntsServer(Node):
+    def __init__(self):
+        super().__init__('add_two_ints_server')
+
+        # Create service: service name, service type, callback
+        self.srv = self.create_service(
+            AddTwoInts,
+            'add_two_ints',
+            self.add_two_ints_callback
+        )
+
+        self.get_logger().info('Add Two Ints Service is ready')
+
+    def add_two_ints_callback(self, request, response):
+        response.sum = request.a + request.b
+        self.get_logger().info(
+            f'Incoming request: a={request.a}, b={request.b}'
+        )
+        self.get_logger().info(f'Sending response: {response.sum}')
+
+        return response
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = AddTwoIntsServer()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Example 4: Service Client (Calling the Service)**
+
+```python
+import sys
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+
+class AddTwoIntsClient(Node):
+    def __init__(self):
+        super().__init__('add_two_ints_client')
+
+        # Create client: service name, service type
+        self.client = self.create_client(AddTwoInts, 'add_two_ints')
+
+        # Wait for service to be available
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Waiting for service to be available...')
+
+    def send_request(self, a, b):
+        request = AddTwoInts.Request()
+        request.a = a
+        request.b = b
+
+        # Call service asynchronously
+        future = self.client.call_async(request)
+        return future
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    if len(sys.argv) < 3:
+        print('Usage: add_two_ints_client.py <a> <b>')
+        return
+
+    node = AddTwoIntsClient()
+
+    a = int(sys.argv[1])
+    b = int(sys.argv[2])
+
+    future = node.send_request(a, b)
+
+    # Wait for result
+    rclpy.spin_until_future_complete(node, future)
+
+    try:
+        result = future.result()
+        node.get_logger().info(f'Result: {a} + {b} = {result.sum}')
+    except Exception as e:
+        node.get_logger().error(f'Service call failed: {e}')
+
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 4. Actions: Long-Running Tasks with Feedback
+
+**Actions** are for long-running tasks that need feedback and can be preempted (cancelled).
+
+**Example 5: Action Server (Fibonacci Sequence Generator)**
+
+```python
+import time
+import rclpy
+from rclpy.action import ActionServer
+from rclpy.node import Node
+from action_tutorials_interfaces.action import Fibonacci
+
+
+class FibonacciActionServer(Node):
+    def __init__(self):
+        super().__init__('fibonacci_action_server')
+
+        # Create action server: node, action type, action name, callback
+        self._action_server = ActionServer(
+            self,
+            Fibonacci,
+            'fibonacci',
+            self.execute_callback
+        )
+
+        self.get_logger().info('Fibonacci Action Server is ready')
+
+    def execute_callback(self, goal_handle):
+        self.get_logger().info('Executing goal...')
+
+        # Initialize feedback message
+        feedback_msg = Fibonacci.Feedback()
+        feedback_msg.sequence = [0, 1]
+
+        # Generate Fibonacci sequence
+        for i in range(1, goal_handle.request.order):
+            # Check if goal was cancelled
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+                self.get_logger().info('Goal cancelled')
+                return Fibonacci.Result()
+
+            # Calculate next Fibonacci number
+            feedback_msg.sequence.append(
+                feedback_msg.sequence[i] + feedback_msg.sequence[i-1]
+            )
+
+            # Publish feedback
+            self.get_logger().info(f'Feedback: {feedback_msg.sequence}')
+            goal_handle.publish_feedback(feedback_msg)
+
+            time.sleep(0.5)  # Simulate work
+
+        # Set result and mark as succeeded
+        goal_handle.succeed()
+
+        result = Fibonacci.Result()
+        result.sequence = feedback_msg.sequence
+
+        self.get_logger().info(f'Result: {result.sequence}')
+        return result
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = FibonacciActionServer()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Quality of Service (QoS) Profiles
+
+QoS policies control communication reliability, durability, history, and more.
+
+**Example 6: QoS Profile Configuration**
+
+```python
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from sensor_msgs.msg import LaserScan
+
+
+class SensorPublisher(Node):
+    def __init__(self):
+        super().__init__('sensor_publisher')
+
+        # Define custom QoS profile for sensor data
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,  # Accept data loss
+            durability=DurabilityPolicy.VOLATILE,        # No late joiners
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        # Create publisher with custom QoS
+        self.publisher_ = self.create_publisher(
+            LaserScan,
+            'scan',
+            qos_profile
+        )
+
+        self.timer = self.create_timer(0.1, self.publish_scan)
+
+    def publish_scan(self):
+        msg = LaserScan()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'laser_frame'
+        msg.angle_min = -1.57
+        msg.angle_max = 1.57
+        msg.angle_increment = 0.01
+        msg.time_increment = 0.0
+        msg.scan_time = 0.1
+        msg.range_min = 0.1
+        msg.range_max = 10.0
+        msg.ranges = [1.0] * 314  # Dummy data
+
+        self.publisher_.publish(msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SensorPublisher()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Common QoS Presets**:
+- `qos_profile_sensor_data`: Best-effort, volatile (for sensor streams)
+- `qos_profile_services_default`: Reliable, volatile (for service communication)
+- `qos_profile_parameters`: Reliable, volatile (for parameter operations)
+- `qos_profile_system_default`: Reliable, volatile (general purpose)
+
+## Parameters: Runtime Configuration
+
+**Example 7: Parameter Declaration and Usage**
+
+```python
+import rclpy
+from rclpy.node import Node
+from rcl_interfaces.msg import ParameterDescriptor
+
+
+class ParameterNode(Node):
+    def __init__(self):
+        super().__init__('parameter_node')
+
+        # Declare parameters with default values and descriptions
+        self.declare_parameter(
+            'robot_name',
+            'RobotAlpha',
+            ParameterDescriptor(description='Name of the robot')
+        )
+
+        self.declare_parameter(
+            'max_speed',
+            1.5,
+            ParameterDescriptor(description='Maximum speed in m/s')
+        )
+
+        self.declare_parameter(
+            'enable_sensors',
+            True,
+            ParameterDescriptor(description='Enable sensor processing')
+        )
+
+        # Get parameter values
+        robot_name = self.get_parameter('robot_name').value
+        max_speed = self.get_parameter('max_speed').value
+        enable_sensors = self.get_parameter('enable_sensors').value
+
+        self.get_logger().info(f'Robot Name: {robot_name}')
+        self.get_logger().info(f'Max Speed: {max_speed} m/s')
+        self.get_logger().info(f'Sensors Enabled: {enable_sensors}')
+
+        # Add parameter callback for runtime changes
+        self.add_on_set_parameters_callback(self.parameter_callback)
+
+    def parameter_callback(self, params):
+        for param in params:
+            if param.name == 'max_speed':
+                if param.value < 0.0 or param.value > 5.0:
+                    self.get_logger().warn(
+                        f'Invalid max_speed: {param.value}. Must be 0-5 m/s'
+                    )
+                    return rclpy.parameter.ParameterCallbackResult(
+                        successful=False,
+                        reason='Speed out of range'
+                    )
+
+        return rclpy.parameter.ParameterCallbackResult(successful=True)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ParameterNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Setting parameters at runtime**:
+```bash
+ros2 param set /parameter_node max_speed 2.0
+ros2 param get /parameter_node robot_name
+ros2 param list
+```
+
+## Multi-threaded Execution
+
+**Example 8: Multi-threaded Executor for Concurrent Callbacks**
+
+```python
+import rclpy
+from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+from std_msgs.msg import String
+import time
+
+
+class MultiThreadedNode(Node):
+    def __init__(self):
+        super().__init__('multi_threaded_node')
+
+        # Create callback groups for parallel execution
+        self.group1 = MutuallyExclusiveCallbackGroup()
+        self.group2 = ReentrantCallbackGroup()
+
+        # Timer 1: Slow processing (group1)
+        self.timer1 = self.create_timer(
+            1.0,
+            self.slow_callback,
+            callback_group=self.group1
+        )
+
+        # Timer 2: Fast processing (group2)
+        self.timer2 = self.create_timer(
+            0.1,
+            self.fast_callback,
+            callback_group=self.group2
+        )
+
+        self.get_logger().info('Multi-threaded node started')
+
+    def slow_callback(self):
+        self.get_logger().info('Slow callback START')
+        time.sleep(2.0)  # Simulate heavy processing
+        self.get_logger().info('Slow callback END')
+
+    def fast_callback(self):
+        self.get_logger().info('Fast callback (runs in parallel)')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = MultiThreadedNode()
+
+    # Use multi-threaded executor
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## rclpy vs rclcpp: When to Use Each
+
+| Aspect | rclpy (Python) | rclcpp (C++) |
+|--------|----------------|--------------|
+| **Performance** | Moderate (interpreted) | High (compiled) |
+| **Development Speed** | Fast (prototyping) | Slower (compilation) |
+| **Use Cases** | AI/ML, prototyping, high-level logic | Real-time control, drivers, performance-critical |
+| **Memory** | Higher overhead | Lower overhead |
+| **Ecosystem** | NumPy, TensorFlow, PyTorch | Eigen, OpenCV (C++ versions) |
+
+**Recommendation**: Use rclpy for cognitive layers (perception, planning) and rclcpp for low-level control (motor drivers, sensor interfaces).
+
+## System Monitoring
+
+Check running nodes, topics, and services:
+
+```bash
+# List all nodes
+ros2 node list
+
+# Get node info
+ros2 node info /minimal_publisher
+
+# List all topics
+ros2 topic list
+
+# Echo topic messages
+ros2 topic echo /chatter
+
+# Get topic info
+ros2 topic info /chatter
+
+# List all services
+ros2 service list
+
+# Call a service
+ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 5, b: 3}"
+
+# List all actions
+ros2 action list
+
+# Send action goal
+ros2 action send_goal /fibonacci action_tutorials_interfaces/action/Fibonacci "{order: 5}"
+```
+
+## Key Takeaways
+
+1. **ROS 2 is DDS-based**: Decentralized, real-time, secure
+2. **Nodes are independent**: Modular, testable, reusable
+3. **Topics for streams**: Sensor data, continuous information
+4. **Services for requests**: Configuration, one-time queries
+5. **Actions for goals**: Navigation, manipulation, long tasks
+6. **QoS matters**: Match profiles to use case (sensor vs command)
+7. **Parameters for config**: Runtime tuning without recompilation
+8. **Multi-threading available**: Parallel processing when needed
+
+<RobotStatus status="simulating" label="Testing ROS 2 Concepts" />
+
+## Next Steps
+
+In Chapter 4, we'll build complete ROS 2 packages from scratch, learning how to organize code, define custom messages, and create launch files for multi-node systems.
+
+<ChatPlaceholder message="Ask me anything about ROS 2 architecture, nodes, topics, services, or actions!" />
+
+---
+
+**Further Reading**:
+- [ROS 2 Documentation](https://docs.ros.org/)
+- [DDS Specification (OMG)](https://www.omg.org/spec/DDS/)
+- [rclpy API Reference](https://docs.ros2.org/latest/api/rclpy/)

@@ -1,0 +1,1041 @@
+---
+id: chapter5-communication-patterns
+title: "Chapter 5: ROS 2 Communication Patterns"
+sidebar_position: 5
+description: "Master topics, services, and actions - when to use each pattern, best practices, and advanced techniques"
+keywords: [ROS 2, topics, services, actions, pub-sub, request-response, communication patterns, callback groups]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatPlaceholder from '@site/src/components/ChatPlaceholder';
+
+# Chapter 5: ROS 2 Communication Patterns
+
+<RobotStatus status="online" label="Communication Hub" />
+
+## Introduction
+
+Choosing the right communication pattern is crucial for building robust robotic systems. ROS 2 provides three fundamental patterns: **Topics** (publish-subscribe), **Services** (request-response), and **Actions** (goal-oriented with feedback). In this chapter, you'll master when and how to use each pattern effectively.
+
+## The Three Pillars of ROS 2 Communication
+
+| Pattern | Model | Use Case | Blocking | Feedback | Cancellable |
+|---------|-------|----------|----------|----------|-------------|
+| **Topics** | Publish-Subscribe | Continuous data streams | No | No | N/A |
+| **Services** | Request-Response | One-time queries | Yes | No | No |
+| **Actions** | Goal-Feedback-Result | Long-running tasks | Yes | Yes | Yes |
+
+## Pattern 1: Topics (Publish-Subscribe)
+
+Topics enable **many-to-many** asynchronous communication. Publishers send messages without knowing who (if anyone) is listening. Subscribers receive messages without knowing who sent them.
+
+### When to Use Topics
+
+✅ **Perfect for**:
+- Sensor data streams (camera, lidar, IMU)
+- Robot state (odometry, battery, joint states)
+- Continuous updates (temperature, speed, position)
+- Broadcasting information to multiple nodes
+
+❌ **Avoid for**:
+- Operations requiring acknowledgment
+- Commands that must succeed (use services)
+- Tasks with progress updates (use actions)
+
+### Example 1: Multi-Sensor Data Fusion
+
+**Scenario**: Fuse data from multiple temperature sensors using topics.
+
+```python
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Temperature
+from statistics import mean
+
+
+class SensorFusionNode(Node):
+    def __init__(self):
+        super().__init__('sensor_fusion_node')
+
+        # Subscribe to multiple sensor topics
+        self.sensor1_sub = self.create_subscription(
+            Temperature,
+            'sensor/temperature1',
+            lambda msg: self.sensor_callback(msg, 'sensor1'),
+            10
+        )
+
+        self.sensor2_sub = self.create_subscription(
+            Temperature,
+            'sensor/temperature2',
+            lambda msg: self.sensor_callback(msg, 'sensor2'),
+            10
+        )
+
+        self.sensor3_sub = self.create_subscription(
+            Temperature,
+            'sensor/temperature3',
+            lambda msg: self.sensor_callback(msg, 'sensor3'),
+            10
+        )
+
+        # Publisher for fused data
+        self.fused_pub = self.create_publisher(
+            Temperature,
+            'sensor/temperature_fused',
+            10
+        )
+
+        # Store latest readings
+        self.latest_readings = {}
+
+        self.get_logger().info('Sensor Fusion Node started')
+
+    def sensor_callback(self, msg, sensor_id):
+        # Store latest reading
+        self.latest_readings[sensor_id] = msg.temperature
+
+        # If we have readings from all sensors, publish fused data
+        if len(self.latest_readings) == 3:
+            fused_temp = mean(self.latest_readings.values())
+
+            fused_msg = Temperature()
+            fused_msg.header.stamp = self.get_clock().now().to_msg()
+            fused_msg.header.frame_id = 'fused_frame'
+            fused_msg.temperature = fused_temp
+            fused_msg.variance = 0.0  # Could calculate actual variance
+
+            self.fused_pub.publish(fused_msg)
+
+            self.get_logger().info(
+                f'Fused temperature: {fused_temp:.2f}°C '
+                f'(Sensors: {list(self.latest_readings.values())})'
+            )
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SensorFusionNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Example 2: Topic with QoS Reliability Settings
+
+**Scenario**: Compare RELIABLE vs BEST_EFFORT QoS for different data types.
+
+```python
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from std_msgs.msg import String
+
+
+class QoSDemoNode(Node):
+    def __init__(self):
+        super().__init__('qos_demo_node')
+
+        # RELIABLE QoS: For critical commands (guarantee delivery)
+        reliable_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
+        self.command_pub = self.create_publisher(
+            String,
+            'robot/commands',
+            reliable_qos
+        )
+
+        # BEST_EFFORT QoS: For sensor data (accept data loss for speed)
+        best_effort_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=5
+        )
+
+        self.sensor_pub = self.create_publisher(
+            String,
+            'robot/sensor_stream',
+            best_effort_qos
+        )
+
+        # Timers
+        self.create_timer(1.0, self.publish_command)
+        self.create_timer(0.01, self.publish_sensor_data)  # 100 Hz
+
+        self.command_count = 0
+        self.sensor_count = 0
+
+    def publish_command(self):
+        msg = String()
+        msg.data = f'COMMAND_{self.command_count}'
+        self.command_pub.publish(msg)
+        self.command_count += 1
+
+    def publish_sensor_data(self):
+        msg = String()
+        msg.data = f'SENSOR_DATA_{self.sensor_count}'
+        self.sensor_pub.publish(msg)
+        self.sensor_count += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = QoSDemoNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Pattern 2: Services (Request-Response)
+
+Services provide **synchronous** request-response communication. The client sends a request and blocks until receiving a response.
+
+### When to Use Services
+
+✅ **Perfect for**:
+- Configuration changes (set parameter, change mode)
+- One-time queries (get robot state, check battery level)
+- Triggering operations (start/stop, reset, calibrate)
+- Remote procedure calls (compute kinematics, path planning)
+
+❌ **Avoid for**:
+- Continuous data (use topics)
+- Long-running tasks (use actions)
+- High-frequency operations (services have overhead)
+
+### Example 3: Robot Mode Control Service
+
+**Scenario**: Service to switch robot operating modes with validation.
+
+```python
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import SetBool
+from std_msgs.msg import String
+
+
+class RobotModeController(Node):
+    def __init__(self):
+        super().__init__('robot_mode_controller')
+
+        self.current_mode = 'IDLE'
+        self.valid_modes = ['IDLE', 'NAVIGATION', 'MANIPULATION', 'EMERGENCY']
+
+        # Service to enable/disable robot
+        self.enable_srv = self.create_service(
+            SetBool,
+            'robot/enable',
+            self.enable_callback
+        )
+
+        # Publisher for mode status
+        self.mode_pub = self.create_publisher(String, 'robot/mode', 10)
+
+        # Timer to publish current mode
+        self.create_timer(1.0, self.publish_mode)
+
+        self.enabled = False
+
+        self.get_logger().info('Robot Mode Controller ready')
+
+    def enable_callback(self, request, response):
+        if request.data:  # Enable request
+            if not self.enabled:
+                self.enabled = True
+                self.current_mode = 'NAVIGATION'
+                response.success = True
+                response.message = 'Robot enabled and set to NAVIGATION mode'
+                self.get_logger().info(response.message)
+            else:
+                response.success = False
+                response.message = 'Robot is already enabled'
+        else:  # Disable request
+            if self.enabled:
+                self.enabled = False
+                self.current_mode = 'IDLE'
+                response.success = True
+                response.message = 'Robot disabled and set to IDLE mode'
+                self.get_logger().info(response.message)
+            else:
+                response.success = False
+                response.message = 'Robot is already disabled'
+
+        return response
+
+    def publish_mode(self):
+        msg = String()
+        msg.data = f'{self.current_mode} ({"ENABLED" if self.enabled else "DISABLED"})'
+        self.mode_pub.publish(msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = RobotModeController()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Client example**:
+```bash
+# Enable robot
+ros2 service call /robot/enable example_interfaces/srv/SetBool "{data: true}"
+
+# Disable robot
+ros2 service call /robot/enable example_interfaces/srv/SetBool "{data: false}"
+```
+
+### Example 4: Asynchronous Service Client (Non-blocking)
+
+**Scenario**: Call a service without blocking the main thread.
+
+```python
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+
+
+class AsyncServiceClient(Node):
+    def __init__(self):
+        super().__init__('async_service_client')
+
+        self.client = self.create_client(AddTwoInts, 'add_two_ints')
+
+        # Wait for service to be available
+        while not self.client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Waiting for service...')
+
+        # Timer to send periodic requests
+        self.create_timer(2.0, self.send_request)
+
+        self.request_count = 0
+
+    def send_request(self):
+        request = AddTwoInts.Request()
+        request.a = self.request_count
+        request.b = self.request_count + 1
+
+        self.get_logger().info(f'Sending request: {request.a} + {request.b}')
+
+        # Call asynchronously with callback
+        future = self.client.call_async(request)
+        future.add_done_callback(self.response_callback)
+
+        self.request_count += 1
+
+    def response_callback(self, future):
+        try:
+            response = future.result()
+            self.get_logger().info(f'Received result: {response.sum}')
+        except Exception as e:
+            self.get_logger().error(f'Service call failed: {e}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = AsyncServiceClient()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Pattern 3: Actions (Goal-Feedback-Result)
+
+Actions are for **long-running tasks** that provide periodic feedback and can be cancelled.
+
+### When to Use Actions
+
+✅ **Perfect for**:
+- Navigation to a goal (with progress updates)
+- Trajectory execution (with waypoint feedback)
+- Object manipulation (with grasp attempts)
+- System calibration (with status updates)
+
+❌ **Avoid for**:
+- Instant operations (use services)
+- Continuous data (use topics)
+- Fire-and-forget commands (use topics)
+
+### Example 5: Navigation Action Server with Feedback
+
+**Scenario**: Simulate robot navigation with distance feedback.
+
+```python
+import time
+import rclpy
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.node import Node
+from action_tutorials_interfaces.action import Fibonacci
+from geometry_msgs.msg import Point
+
+
+class NavigationActionServer(Node):
+    def __init__(self):
+        super().__init__('navigation_action_server')
+
+        self._action_server = ActionServer(
+            self,
+            Fibonacci,  # Replace with custom NavigateToPoint action
+            'navigate_to_point',
+            execute_callback=self.execute_callback,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback
+        )
+
+        self.current_position = Point(x=0.0, y=0.0, z=0.0)
+
+        self.get_logger().info('Navigation Action Server ready')
+
+    def goal_callback(self, goal_request):
+        """Accept or reject goal requests"""
+        self.get_logger().info('Received navigation goal')
+        # Could add validation here (e.g., goal within bounds)
+        return GoalResponse.ACCEPT
+
+    def cancel_callback(self, goal_handle):
+        """Handle cancellation requests"""
+        self.get_logger().info('Received cancel request')
+        return CancelResponse.ACCEPT
+
+    def execute_callback(self, goal_handle):
+        """Execute the navigation goal"""
+        self.get_logger().info('Executing navigation goal...')
+
+        feedback_msg = Fibonacci.Feedback()
+        feedback_msg.sequence = []
+
+        # Simulate navigation (10 steps to goal)
+        for i in range(10):
+            # Check if goal was cancelled
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+                self.get_logger().info('Navigation cancelled')
+                return Fibonacci.Result()
+
+            # Simulate movement
+            self.current_position.x += 0.1
+            self.current_position.y += 0.1
+
+            # Calculate distance to goal
+            distance_remaining = 10 - i
+
+            # Publish feedback
+            feedback_msg.sequence.append(distance_remaining)
+            goal_handle.publish_feedback(feedback_msg)
+
+            self.get_logger().info(
+                f'Feedback: Distance remaining = {distance_remaining} meters'
+            )
+
+            time.sleep(0.5)
+
+        # Goal succeeded
+        goal_handle.succeed()
+
+        result = Fibonacci.Result()
+        result.sequence = feedback_msg.sequence
+
+        self.get_logger().info('Navigation completed successfully!')
+        return result
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = NavigationActionServer()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Example 6: Action Client with Goal Cancellation
+
+```python
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from action_tutorials_interfaces.action import Fibonacci
+
+
+class NavigationActionClient(Node):
+    def __init__(self):
+        super().__init__('navigation_action_client')
+
+        self._action_client = ActionClient(
+            self,
+            Fibonacci,
+            'navigate_to_point'
+        )
+
+        self.get_logger().info('Waiting for action server...')
+        self._action_client.wait_for_server()
+        self.get_logger().info('Action server available')
+
+    def send_goal(self, target_distance):
+        goal_msg = Fibonacci.Goal()
+        goal_msg.order = target_distance
+
+        self.get_logger().info(f'Sending navigation goal: {target_distance} meters')
+
+        # Send goal asynchronously
+        self._send_goal_future = self._action_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self.feedback_callback
+        )
+
+        self._send_goal_future.add_done_callback(self.goal_response_callback)
+
+    def goal_response_callback(self, future):
+        goal_handle = future.result()
+
+        if not goal_handle.accepted:
+            self.get_logger().info('Goal rejected')
+            return
+
+        self.get_logger().info('Goal accepted')
+
+        self._goal_handle = goal_handle
+
+        # Get result asynchronously
+        self._get_result_future = goal_handle.get_result_async()
+        self._get_result_future.add_done_callback(self.get_result_callback)
+
+        # Schedule cancellation after 3 seconds (for demo)
+        self.create_timer(3.0, self.cancel_goal, one_shot=True)
+
+    def feedback_callback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        self.get_logger().info(f'Feedback: {feedback.sequence}')
+
+    def get_result_callback(self, future):
+        result = future.result().result
+        status = future.result().status
+
+        if status == 4:  # SUCCEEDED
+            self.get_logger().info(f'Navigation succeeded! Result: {result.sequence}')
+        elif status == 5:  # CANCELED
+            self.get_logger().info('Navigation was cancelled')
+        else:
+            self.get_logger().info(f'Navigation failed with status: {status}')
+
+    def cancel_goal(self):
+        self.get_logger().info('Cancelling goal...')
+        cancel_future = self._goal_handle.cancel_goal_async()
+        cancel_future.add_done_callback(self.cancel_done_callback)
+
+    def cancel_done_callback(self, future):
+        cancel_response = future.result()
+        if len(cancel_response.goals_canceling) > 0:
+            self.get_logger().info('Goal successfully cancelled')
+        else:
+            self.get_logger().info('Goal failed to cancel')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = NavigationActionClient()
+
+    # Send goal
+    node.send_goal(10)
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Advanced Topics
+
+### Example 7: Callback Groups for Parallel Execution
+
+**Scenario**: Process fast sensor data while handling slow service calls.
+
+```python
+import time
+import rclpy
+from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from std_msgs.msg import String
+from example_interfaces.srv import Trigger
+
+
+class ParallelProcessingNode(Node):
+    def __init__(self):
+        super().__init__('parallel_processing_node')
+
+        # Callback group 1: For slow service
+        self.slow_group = MutuallyExclusiveCallbackGroup()
+
+        # Callback group 2: For fast sensor processing
+        self.fast_group = ReentrantCallbackGroup()
+
+        # Slow service (blocks for 2 seconds)
+        self.slow_service = self.create_service(
+            Trigger,
+            'slow_service',
+            self.slow_service_callback,
+            callback_group=self.slow_group
+        )
+
+        # Fast topic subscriber (processes immediately)
+        self.fast_subscriber = self.create_subscription(
+            String,
+            'fast_topic',
+            self.fast_callback,
+            10,
+            callback_group=self.fast_group
+        )
+
+        # Publisher for fast data
+        self.fast_publisher = self.create_publisher(String, 'fast_topic', 10)
+
+        # Timer to publish fast data
+        self.create_timer(
+            0.1,
+            self.publish_fast_data,
+            callback_group=self.fast_group
+        )
+
+        self.count = 0
+
+        self.get_logger().info('Parallel Processing Node started')
+
+    def slow_service_callback(self, request, response):
+        self.get_logger().info('Slow service called - sleeping for 2 seconds...')
+        time.sleep(2.0)
+        response.success = True
+        response.message = 'Slow operation completed'
+        self.get_logger().info('Slow service completed')
+        return response
+
+    def fast_callback(self, msg):
+        self.get_logger().info(f'Fast callback: {msg.data}')
+
+    def publish_fast_data(self):
+        msg = String()
+        msg.data = f'Fast data {self.count}'
+        self.fast_publisher.publish(msg)
+        self.count += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = ParallelProcessingNode()
+
+    # IMPORTANT: Use multi-threaded executor
+    executor = MultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Example 8: Lifecycle Managed Nodes
+
+**Scenario**: Node with configurable, activate, deactivate states.
+
+```python
+import rclpy
+from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn, LifecycleState
+from rclpy.lifecycle import Publisher
+from std_msgs.msg import String
+
+
+class ManagedPublisher(LifecycleNode):
+    def __init__(self):
+        super().__init__('managed_publisher')
+
+        self.publisher_ = None
+        self.timer = None
+
+    def on_configure(self, state: LifecycleState):
+        self.get_logger().info('Configuring...')
+
+        # Create publisher (lifecycle-aware)
+        self.publisher_ = self.create_lifecycle_publisher(String, 'managed_topic', 10)
+
+        self.get_logger().info('Configured successfully')
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_activate(self, state: LifecycleState):
+        self.get_logger().info('Activating...')
+
+        # Start publishing
+        self.timer = self.create_timer(1.0, self.publish_message)
+
+        self.get_logger().info('Activated successfully')
+        return super().on_activate(state)
+
+    def on_deactivate(self, state: LifecycleState):
+        self.get_logger().info('Deactivating...')
+
+        # Stop publishing
+        if self.timer:
+            self.timer.cancel()
+            self.timer = None
+
+        self.get_logger().info('Deactivated successfully')
+        return super().on_deactivate(state)
+
+    def on_cleanup(self, state: LifecycleState):
+        self.get_logger().info('Cleaning up...')
+
+        # Destroy resources
+        if self.publisher_:
+            self.destroy_publisher(self.publisher_)
+            self.publisher_ = None
+
+        self.get_logger().info('Cleaned up successfully')
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_shutdown(self, state: LifecycleState):
+        self.get_logger().info('Shutting down...')
+        return TransitionCallbackReturn.SUCCESS
+
+    def publish_message(self):
+        if self.publisher_ and self.publisher_.is_activated:
+            msg = String()
+            msg.data = f'Managed message at {self.get_clock().now().to_msg()}'
+            self.publisher_.publish(msg)
+            self.get_logger().info(f'Published: {msg.data}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ManagedPublisher()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+**Managing lifecycle**:
+```bash
+# Configure the node
+ros2 lifecycle set /managed_publisher configure
+
+# Activate the node
+ros2 lifecycle set /managed_publisher activate
+
+# Deactivate the node
+ros2 lifecycle set /managed_publisher deactivate
+
+# Get current state
+ros2 lifecycle get /managed_publisher
+```
+
+### Example 9: Composable Nodes (Intra-process Communication)
+
+**Scenario**: Zero-copy message passing for performance.
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class TalkerNode(Node):
+    def __init__(self):
+        super().__init__('talker')
+
+        self.publisher_ = self.create_publisher(String, 'chatter', 10)
+        self.timer = self.create_timer(0.5, self.publish_message)
+        self.count = 0
+
+    def publish_message(self):
+        msg = String()
+        msg.data = f'Hello from Talker: {self.count}'
+        self.publisher_.publish(msg)
+        self.count += 1
+
+
+class ListenerNode(Node):
+    def __init__(self):
+        super().__init__('listener')
+
+        self.subscription = self.create_subscription(
+            String,
+            'chatter',
+            self.listener_callback,
+            10
+        )
+
+    def listener_callback(self, msg):
+        self.get_logger().info(f'Listener heard: {msg.data}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    # Create both nodes in same process for intra-process communication
+    talker = TalkerNode()
+    listener = ListenerNode()
+
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(talker)
+    executor.add_node(listener)
+
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        talker.destroy_node()
+        listener.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### Example 10: Error Handling and Timeouts
+
+**Scenario**: Robust service calls with timeout and retry logic.
+
+```python
+import rclpy
+from rclpy.node import Node
+from example_interfaces.srv import AddTwoInts
+import time
+
+
+class RobustServiceClient(Node):
+    def __init__(self):
+        super().__init__('robust_service_client')
+
+        self.client = self.create_client(AddTwoInts, 'add_two_ints')
+
+    def call_service_with_retry(self, a, b, max_retries=3, timeout_sec=5.0):
+        """Call service with timeout and retry logic"""
+
+        # Wait for service
+        if not self.client.wait_for_service(timeout_sec=timeout_sec):
+            self.get_logger().error(
+                f'Service not available after {timeout_sec} seconds'
+            )
+            return None
+
+        for attempt in range(max_retries):
+            try:
+                request = AddTwoInts.Request()
+                request.a = a
+                request.b = b
+
+                self.get_logger().info(
+                    f'Attempt {attempt + 1}/{max_retries}: Calling service...'
+                )
+
+                future = self.client.call_async(request)
+
+                # Wait for result with timeout
+                start_time = time.time()
+                while rclpy.ok():
+                    rclpy.spin_once(self, timeout_sec=0.1)
+
+                    if future.done():
+                        result = future.result()
+                        self.get_logger().info(f'Success: {result.sum}')
+                        return result.sum
+
+                    if time.time() - start_time > timeout_sec:
+                        self.get_logger().warn(
+                            f'Attempt {attempt + 1} timed out after {timeout_sec}s'
+                        )
+                        break
+
+            except Exception as e:
+                self.get_logger().error(f'Attempt {attempt + 1} failed: {e}')
+
+            if attempt < max_retries - 1:
+                self.get_logger().info(f'Retrying in 1 second...')
+                time.sleep(1.0)
+
+        self.get_logger().error(f'All {max_retries} attempts failed')
+        return None
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = RobustServiceClient()
+
+    result = node.call_service_with_retry(10, 20, max_retries=3, timeout_sec=5.0)
+
+    if result is not None:
+        print(f'Final result: {result}')
+    else:
+        print('Service call failed')
+
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Communication Pattern Decision Tree
+
+```
+START: What do you need to communicate?
+│
+├─ Continuous stream of data (sensor readings, state updates)?
+│  └─ YES → Use TOPICS (publish-subscribe)
+│     ├─ Critical data (commands, safety)? → RELIABLE QoS
+│     └─ High-frequency data (sensors)? → BEST_EFFORT QoS
+│
+├─ One-time request needing immediate response?
+│  └─ YES → Use SERVICES (request-response)
+│     ├─ Can tolerate brief blocking? → Synchronous call
+│     └─ Need non-blocking? → Asynchronous call
+│
+├─ Long-running task with progress updates?
+│  └─ YES → Use ACTIONS (goal-feedback-result)
+│     ├─ Need to cancel mid-execution? → Action with cancel
+│     └─ Need status monitoring? → Action with feedback
+│
+└─ Unsure?
+   └─ Default to TOPICS for data, SERVICES for commands
+```
+
+## Best Practices Summary
+
+### Topics
+1. **Use QoS appropriately**: RELIABLE for commands, BEST_EFFORT for sensors
+2. **Keep messages small**: Large messages → network congestion
+3. **Avoid high-frequency publishing**: Batch or downsample data
+4. **Match subscriber/publisher QoS**: Mismatched QoS = no communication
+
+### Services
+1. **Avoid in control loops**: Service calls block execution
+2. **Set timeouts**: Prevent infinite waiting
+3. **Implement retry logic**: Network hiccups happen
+4. **Keep responses fast**: Long operations → use actions instead
+
+### Actions
+1. **Provide meaningful feedback**: Progress percentage, status messages
+2. **Handle cancellation**: Always check `is_cancel_requested`
+3. **Set reasonable goals**: Validate goal requests before accepting
+4. **Report final status**: Succeeded, cancelled, or failed
+
+### General
+1. **Use callback groups**: Enable parallel processing
+2. **Multi-threaded executor**: For concurrent operations
+3. **Lifecycle nodes**: For managed startup/shutdown
+4. **Error handling**: Always expect failures and handle them
+
+## Performance Considerations
+
+| Pattern | Latency | Throughput | Memory | CPU |
+|---------|---------|------------|--------|-----|
+| Topics (intra-process) | ~μs | Very High | Low | Low |
+| Topics (inter-process) | ~ms | High | Medium | Medium |
+| Services | ~ms | Medium | Low | Low |
+| Actions | ~ms | Low | Medium | Medium |
+
+**Optimization tips**:
+- **Intra-process**: Use composable nodes for zero-copy
+- **Message size**: Smaller messages = faster transmission
+- **QoS tuning**: Match reliability/history to use case
+- **Callback groups**: Prevent blocking in multi-node systems
+
+## Key Takeaways
+
+1. **Topics = Streams**: Use for continuous data (sensors, state)
+2. **Services = Queries**: Use for one-time requests (config, status)
+3. **Actions = Goals**: Use for long tasks (navigation, manipulation)
+4. **QoS matters**: RELIABLE vs BEST_EFFORT affects performance
+5. **Async > Sync**: Non-blocking calls prevent deadlocks
+6. **Callback groups**: Enable true parallelism
+7. **Lifecycle nodes**: Standardized state management
+8. **Error handling**: Always validate, timeout, and retry
+
+<RobotStatus status="simulating" label="Testing Communication Patterns" />
+
+## Next Steps
+
+You've now mastered the fundamentals of ROS 2! In Chapter 6, we'll move into the world of simulation with Gazebo, where you'll test these communication patterns in realistic physics-based environments.
+
+<ChatPlaceholder message="Ask me about choosing the right communication pattern, QoS settings, or advanced techniques!" />
+
+---
+
+**Further Reading**:
+- [ROS 2 Topics Tutorial](https://docs.ros.org/en/humble/Tutorials/Topics.html)
+- [ROS 2 Services Tutorial](https://docs.ros.org/en/humble/Tutorials/Services.html)
+- [ROS 2 Actions Tutorial](https://docs.ros.org/en/humble/Tutorials/Actions.html)
+- [QoS Documentation](https://docs.ros.org/en/humble/Concepts/About-Quality-of-Service-Settings.html)
