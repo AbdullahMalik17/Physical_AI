@@ -7,7 +7,7 @@ keywords: [ROS 2, DDS, middleware, nodes, topics, services, actions, QoS, rclpy]
 ---
 
 import RobotStatus from '@site/src/components/RobotStatus';
-import ChatPlaceholder from '@site/src/components/ChatPlaceholder';
+import ChatRAG from '@site/src/components/ChatRAG';
 
 # Chapter 3: ROS 2 Architecture & Core Concepts
 
@@ -653,7 +653,13 @@ ros2 action send_goal /fibonacci action_tutorials_interfaces/action/Fibonacci "{
 
 In Chapter 4, we'll build complete ROS 2 packages from scratch, learning how to organize code, define custom messages, and create launch files for multi-node systems.
 
-<ChatPlaceholder message="Ask me anything about ROS 2 architecture, nodes, topics, services, or actions!" />
+<ChatRAG
+  context="ROS 2 architecture, DDS, nodes, topics, services, actions, QoS"
+  placeholder="Ask about ROS 2 architecture, nodes, topics, services, or actions..."
+  useRealAPI={false}
+  messageLimit={10}
+  resetLimitDaily={true}
+/>
 
 ---
 

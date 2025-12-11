@@ -7,7 +7,7 @@ keywords: [ROS 2, topics, services, actions, pub-sub, request-response, communic
 ---
 
 import RobotStatus from '@site/src/components/RobotStatus';
-import ChatPlaceholder from '@site/src/components/ChatPlaceholder';
+import ChatRAG from '@site/src/components/ChatRAG';
 
 # Chapter 5: ROS 2 Communication Patterns
 
@@ -1030,7 +1030,13 @@ START: What do you need to communicate?
 
 You've now mastered the fundamentals of ROS 2! In Chapter 6, we'll move into the world of simulation with Gazebo, where you'll test these communication patterns in realistic physics-based environments.
 
-<ChatPlaceholder message="Ask me about choosing the right communication pattern, QoS settings, or advanced techniques!" />
+<ChatRAG
+  context="ROS 2 communication, topics, services, actions, QoS, callback groups"
+  placeholder="Ask about choosing the right communication pattern, QoS settings, or advanced techniques..."
+  useRealAPI={false}
+  messageLimit={10}
+  resetLimitDaily={true}
+/>
 
 ---
 
