@@ -31,7 +31,16 @@ const sidebars: SidebarsConfig = {
         'part1-fundamentals/chapter5-communication-patterns',
       ],
     },
-    // Part 2 and 3 will be added in future milestones
+    {
+      type: 'category',
+      label: 'Part 2: Simulation',
+      collapsed: false,
+      items: [
+        'part2-simulation/chapter6-gazebo',
+        'part2-simulation/chapter7-unity',
+      ],
+    },
+    // Part 3 will be added in future milestones
   ],
 };
 

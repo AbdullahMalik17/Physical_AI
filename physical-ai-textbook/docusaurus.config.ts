@@ -22,8 +22,8 @@ const config: Config = {
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'your-org', // Usually your GitHub org/user name.
-  projectName: 'physical-ai-textbook', // Usually your repo name.
+  organizationName: 'AbdullahMalik17', // Usually your GitHub org/user name.
+  projectName: 'Physical_AI', // Usually your repo name.
 
   onBrokenLinks: 'throw',
 
@@ -54,7 +54,7 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/your-org/physical-ai-textbook/edit/main/',
+            'https://github.com/AbdullahMalik17/Physical_AI/edit/main/physical-ai-textbook/',
         },
         blog: false,  // Disable blog
         theme: {
@@ -89,7 +89,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/your-org/physical-ai-textbook',
+          href: 'https://github.com/AbdullahMalik17/Physical_AI',
           label: 'GitHub',
           position: 'right',
         },

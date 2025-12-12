@@ -1,0 +1,705 @@
+---
+id: chapter7-unity
+title: "Chapter 7: Unity for Robot Visualization"
+sidebar_position: 7
+description: "Learn Unity-ROS 2 integration for high-fidelity robot visualization, VR/AR applications, and real-time data streaming"
+keywords: [Unity, ROS 2, visualization, VR, AR, Unity Robotics Hub, rendering, simulation]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatRAG from '@site/src/components/ChatRAG';
+
+# Chapter 7: Unity for Robot Visualization
+
+<RobotStatus status="online" label="Unity Renderer" />
+
+## Introduction
+
+While Gazebo excels at physics simulation, **Unity** brings photorealistic rendering, advanced graphics, and immersive VR/AR capabilities to robotics. Unity transforms robot visualization from functional to cinematic, enabling applications like:
+
+- **Marketing and Demos**: Stunning visuals for presentations and videos
+- **Human-Robot Interaction (HRI)**: Realistic environments for social robotics research
+- **VR/AR Training**: Immersive operator training simulators
+- **Digital Twins**: Real-time 3D replicas of physical robots
+- **Synthetic Data Generation**: High-quality labeled images for ML training
+
+In this chapter, you'll learn to connect Unity with ROS 2, stream real-time robot data, and create interactive 3D visualizations.
+
+**Why Unity for Physical AI:**
+- **Photorealism**: Unity's rendering rivals game engines (HDRP, URP)
+- **Cross-platform**: Desktop, mobile, VR headsets (Quest, Vive, HoloLens)
+- **Real-time**: 60+ FPS even with complex scenes
+- **Asset Ecosystem**: Massive library of 3D models, animations, and effects
+
+## Unity vs. Gazebo: Complementary Tools
+
+| Aspect | Gazebo | Unity |
+|--------|--------|-------|
+| **Primary Purpose** | Physics simulation | Rendering & visualization |
+| **Physics Accuracy** | Excellent (research-grade) | Good (game-grade) |
+| **Visual Quality** | Functional | Photorealistic |
+| **VR/AR Support** | Limited | Native, excellent |
+| **Performance** | CPU-intensive | GPU-optimized |
+| **Learning Curve** | Moderate | Steep (game dev skills) |
+| **Best For** | Algorithm testing | Demos, HRI, training |
+
+**Best Practice**: Use both! Run physics in Gazebo, visualize in Unity via ROS 2 bridge.
+
+## Unity Robotics Hub
+
+Unity Robotics Hub is Unity Technologies' official solution for ROS integration.
+
+### Components
+
+1. **ROS-TCP-Connector**: Unity package for ROS communication
+2. **ROS-TCP-Endpoint**: ROS 2 package (server) for receiving Unity data
+3. **URDF Importer**: Import robot models from URDF files
+4. **Visualization Tools**: TF viewer, sensor visualizations
+
+### Architecture
+
+```
+ROS 2 System (Linux/WSL)          Unity (Windows/macOS)
+┌─────────────────────┐          ┌──────────────────────┐
+│  ROS 2 Nodes        │          │  Unity Scene         │
+│  ├─ /robot_state    │          │  ├─ Robot GameObject │
+│  ├─ /cmd_vel        │◄─────────┤  ├─ Camera Rigs      │
+│  └─ /sensor_data    ├─────────►│  └─ UI Elements      │
+│                     │          │                      │
+│  ROS-TCP-Endpoint   │          │  ROS-TCP-Connector   │
+│  (Port 10000)       │◄────────►│  (Client)            │
+└─────────────────────┘          └──────────────────────┘
+        TCP/IP Connection
+```
+
+## Setting Up Unity for ROS 2
+
+### Installation
+
+**Example 1: Install Unity and Unity Robotics Hub**
+
+```bash
+# Step 1: Install Unity Hub (from https://unity.com/download)
+# Download Unity Hub for your OS (Windows/macOS/Linux)
+
+# Step 2: Install Unity Editor (2021.3 LTS recommended)
+# Open Unity Hub → Installs → Install Editor
+# Version: 2021.3.x LTS
+# Modules:
+#   - Linux Build Support (if on Windows)
+#   - Android Build Support (for mobile/AR)
+
+# Step 3: Create New Unity Project
+# Unity Hub → Projects → New Project
+# Template: 3D (URP - Universal Render Pipeline)
+# Name: RobotVisualization
+# Location: ~/UnityProjects/RobotVisualization
+
+# Step 4: Install Unity Robotics Hub
+# In Unity Editor:
+# Window → Package Manager → Add package from git URL
+# URL: https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector
+```
+
+### Install ROS 2 Endpoint
+
+**Example 2: Set Up ROS-TCP-Endpoint on ROS 2 Side**
+
+```bash
+# Create workspace
+mkdir -p ~/ros2_unity_ws/src
+cd ~/ros2_unity_ws/src
+
+# Clone ROS-TCP-Endpoint
+git clone https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git
+
+# Build
+cd ~/ros2_unity_ws
+colcon build --packages-select ros_tcp_endpoint
+
+# Source
+source install/setup.bash
+
+# Launch endpoint (default port: 10000)
+ros2 run ros_tcp_endpoint default_server_endpoint
+```
+
+**Expected output:**
+```
+[INFO] [ros_tcp_endpoint]: ROS-TCP-Endpoint started on port 10000
+[INFO] [ros_tcp_endpoint]: Waiting for Unity connection...
+```
+
+## Importing URDF into Unity
+
+Unity can directly import ROS URDF files.
+
+**Example 3: Import Robot URDF**
+
+```bash
+# In Unity Editor:
+# 1. Assets → Import Robot from URDF
+# 2. Select your robot.urdf file
+# 3. Import Settings:
+#    - Axis Type: Y Axis
+#    - Mesh Decomposer: VHACD (for collisions)
+# 4. Click "Import URDF"
+
+# Unity will create a GameObject with:
+# - All links as child GameObjects
+# - ArticulationBody components for physics
+# - Meshes and materials
+```
+
+**C# Script to Access Imported Robot:**
+
+```csharp
+// RobotController.cs
+using UnityEngine;
+
+public class RobotController : MonoBehaviour
+{
+    // Find robot in hierarchy
+    private GameObject robot;
+
+    void Start()
+    {
+        // Find imported robot (name from URDF)
+        robot = GameObject.Find("simple_robot");
+
+        if (robot != null)
+        {
+            Debug.Log($"Robot found: {robot.name}");
+
+            // List all joints (ArticulationBodies)
+            ArticulationBody[] joints = robot.GetComponentsInChildren<ArticulationBody>();
+            Debug.Log($"Number of joints: {joints.Length}");
+
+            foreach (var joint in joints)
+            {
+                Debug.Log($"Joint: {joint.name}, Type: {joint.jointType}");
+            }
+        }
+        else
+        {
+            Debug.LogError("Robot not found in scene!");
+        }
+    }
+}
+```
+
+## Connecting Unity to ROS 2
+
+**Example 4: Configure ROS Connection in Unity**
+
+```csharp
+// ROSConnection.cs
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+
+public class ROSConnection : MonoBehaviour
+{
+    void Start()
+    {
+        // Get ROS connection instance
+        ROSConnection ros = ROSConnection.GetOrCreateInstance();
+
+        // Configure connection (must match ROS-TCP-Endpoint)
+        ros.Connect("192.168.1.100", 10000);  // Replace with your ROS machine IP
+
+        // If ROS 2 is on same machine:
+        // ros.Connect("localhost", 10000);
+
+        Debug.Log("ROS connection configured");
+    }
+}
+```
+
+**Alternative: Configure via Unity Editor GUI**
+```
+Robotics → ROS Settings
+- ROS IP Address: 192.168.1.100
+- ROS Port: 10000
+- Protocol: ROS2
+```
+
+## Subscribing to ROS 2 Topics in Unity
+
+**Example 5: Subscribe to Joint States**
+
+```csharp
+// JointStateSubscriber.cs
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Sensor;  // sensor_msgs
+
+public class JointStateSubscriber : MonoBehaviour
+{
+    private ROSConnection ros;
+    private ArticulationBody[] joints;
+
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        // Subscribe to /joint_states topic
+        ros.Subscribe<JointStateMsg>("joint_states", UpdateJointStates);
+
+        // Find robot joints
+        joints = GetComponentsInChildren<ArticulationBody>();
+
+        Debug.Log($"Subscribed to /joint_states. Found {joints.Length} joints.");
+    }
+
+    void UpdateJointStates(JointStateMsg msg)
+    {
+        // Update Unity joints based on ROS joint states
+        for (int i = 0; i < msg.name.Length && i < joints.Length; i++)
+        {
+            string jointName = msg.name[i];
+            float position = (float)msg.position[i];
+
+            // Find matching Unity joint
+            ArticulationBody joint = FindJointByName(jointName);
+            if (joint != null)
+            {
+                // Set joint position (convert rad to deg if needed)
+                var drive = joint.xDrive;
+                drive.target = position * Mathf.Rad2Deg;
+                joint.xDrive = drive;
+            }
+        }
+    }
+
+    ArticulationBody FindJointByName(string name)
+    {
+        foreach (var joint in joints)
+        {
+            if (joint.name.Contains(name))
+                return joint;
+        }
+        return null;
+    }
+}
+```
+
+## Publishing to ROS 2 from Unity
+
+**Example 6: Publish Twist Commands (Teleoperation)**
+
+```csharp
+// TwistPublisher.cs
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Geometry;  // geometry_msgs
+
+public class TwistPublisher : MonoBehaviour
+{
+    private ROSConnection ros;
+    private string topicName = "cmd_vel";
+
+    // Movement parameters
+    public float linearSpeed = 1.0f;
+    public float angularSpeed = 1.0f;
+
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        // Register publisher
+        ros.RegisterPublisher<TwistMsg>(topicName);
+
+        Debug.Log($"Publishing to /{topicName}");
+    }
+
+    void Update()
+    {
+        // Read keyboard input
+        float linear = Input.GetAxis("Vertical") * linearSpeed;
+        float angular = Input.GetAxis("Horizontal") * angularSpeed;
+
+        if (linear != 0 || angular != 0)
+        {
+            // Create Twist message
+            TwistMsg twist = new TwistMsg
+            {
+                linear = new Vector3Msg { x = linear, y = 0, z = 0 },
+                angular = new Vector3Msg { x = 0, y = 0, z = angular }
+            };
+
+            // Publish
+            ros.Publish(topicName, twist);
+
+            Debug.Log($"Publishing: linear={linear:F2}, angular={angular:F2}");
+        }
+    }
+}
+```
+
+**Now you can drive the ROS 2 robot from Unity with arrow keys!**
+
+## Camera Streaming: ROS 2 to Unity
+
+**Example 7: Display ROS Camera Feed in Unity**
+
+```csharp
+// CameraSubscriber.cs
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Sensor;  // sensor_msgs
+using UnityEngine.UI;
+
+public class CameraSubscriber : MonoBehaviour
+{
+    private ROSConnection ros;
+    public RawImage imageDisplay;  // Assign UI RawImage in Inspector
+
+    private Texture2D texture;
+
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+        ros.Subscribe<ImageMsg>("camera/image_raw", UpdateImage);
+
+        // Create texture for image display
+        texture = new Texture2D(640, 480, TextureFormat.RGB24, false);
+        imageDisplay.texture = texture;
+
+        Debug.Log("Subscribed to /camera/image_raw");
+    }
+
+    void UpdateImage(ImageMsg msg)
+    {
+        // Check image dimensions
+        if (texture.width != msg.width || texture.height != msg.height)
+        {
+            texture.Reinitialize((int)msg.width, (int)msg.height);
+        }
+
+        // Load raw image data
+        texture.LoadRawTextureData(msg.data);
+        texture.Apply();
+    }
+}
+```
+
+**UI Setup:**
+```
+Canvas
+└─ RawImage (assign to imageDisplay)
+   - Width: 640
+   - Height: 480
+```
+
+## TF (Transform) Visualization
+
+**Example 8: Visualize TF Tree in Unity**
+
+```csharp
+// TFTreeVisualizer.cs
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using Unity.Robotics.ROSTCPConnector.ROSGeometry;
+using RosMessageTypes.Geometry;
+
+public class TFTreeVisualizer : MonoBehaviour
+{
+    private ROSConnection ros;
+    public GameObject[] tfFrames;  // Assign GameObjects for each frame
+
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        // Subscribe to TF
+        ros.Subscribe<TransformStampedMsg>("tf", UpdateTransforms);
+    }
+
+    void UpdateTransforms(TransformStampedMsg msg)
+    {
+        // Find corresponding GameObject
+        GameObject frame = FindFrameByName(msg.child_frame_id);
+
+        if (frame != null)
+        {
+            // Convert ROS transform to Unity
+            Vector3 position = msg.transform.translation.From<FLU>();
+            Quaternion rotation = msg.transform.rotation.From<FLU>();
+
+            frame.transform.position = position;
+            frame.transform.rotation = rotation;
+        }
+    }
+
+    GameObject FindFrameByName(string frameName)
+    {
+        foreach (var frame in tfFrames)
+        {
+            if (frame.name == frameName)
+                return frame;
+        }
+        return null;
+    }
+}
+```
+
+## VR Integration
+
+Unity's VR support enables immersive robot monitoring and control.
+
+**Example 9: VR Robot Control with Hand Tracking**
+
+```csharp
+// VRRobotController.cs
+using UnityEngine;
+using UnityEngine.XR;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Geometry;
+
+public class VRRobotController : MonoBehaviour
+{
+    private ROSConnection ros;
+    private InputDevice rightController;
+
+    public float speedMultiplier = 2.0f;
+
+    void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+        ros.RegisterPublisher<TwistMsg>("cmd_vel");
+
+        // Get VR controller
+        var controllers = new List<InputDevice>();
+        InputDevices.GetDevicesWithCharacteristics(
+            InputDeviceCharacteristics.Controller | InputDeviceCharacteristics.Right,
+            controllers
+        );
+
+        if (controllers.Count > 0)
+        {
+            rightController = controllers[0];
+            Debug.Log($"VR Controller connected: {rightController.name}");
+        }
+    }
+
+    void Update()
+    {
+        if (!rightController.isValid) return;
+
+        // Read joystick input
+        Vector2 joystick;
+        if (rightController.TryGetFeatureValue(CommonUsages.primary2DAxis, out joystick))
+        {
+            // Create Twist command
+            TwistMsg twist = new TwistMsg
+            {
+                linear = new Vector3Msg { x = joystick.y * speedMultiplier },
+                angular = new Vector3Msg { z = joystick.x * speedMultiplier }
+            };
+
+            ros.Publish("cmd_vel", twist);
+        }
+    }
+}
+```
+
+**VR Setup:**
+- Install XR Plugin Management (Unity Package Manager)
+- Enable Oculus/OpenXR plugin
+- Add XR Rig to scene
+
+## Performance Optimization
+
+### 1. Level of Detail (LOD)
+
+```csharp
+// Automatically reduce mesh complexity at distance
+LODGroup lodGroup = robotModel.AddComponent<LODGroup>();
+
+LOD[] lods = new LOD[3];
+lods[0] = new LOD(0.6f, highDetailRenderers);   // Close
+lods[1] = new LOD(0.3f, mediumDetailRenderers); // Medium
+lods[2] = new LOD(0.1f, lowDetailRenderers);    // Far
+
+lodGroup.SetLODs(lods);
+```
+
+### 2. Occlusion Culling
+
+```
+Window → Rendering → Occlusion Culling
+- Select static objects
+- Click "Bake"
+```
+
+### 3. Message Rate Limiting
+
+```csharp
+// Limit updates to 30 Hz instead of every frame
+private float updateInterval = 1f / 30f;
+private float lastUpdate = 0f;
+
+void Update()
+{
+    if (Time.time - lastUpdate > updateInterval)
+    {
+        // Update visualization
+        lastUpdate = Time.time;
+    }
+}
+```
+
+## Creating Synthetic Training Data
+
+Unity excels at generating labeled data for ML.
+
+**Example 10: Capture Segmented Images**
+
+```csharp
+// SyntheticDataCapture.cs
+using UnityEngine;
+using UnityEngine.Perception.GroundTruth;
+
+public class SyntheticDataCapture : MonoBehaviour
+{
+    public Camera captureCamera;
+
+    void Start()
+    {
+        // Add perception camera
+        var perceptionCamera = captureCamera.gameObject.AddComponent<PerceptionCamera>();
+
+        // Enable semantic segmentation
+        perceptionCamera.showVisualizations = true;
+
+        Debug.Log("Synthetic data capture enabled");
+    }
+
+    void Update()
+    {
+        // Capture on spacebar
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            CaptureFrame();
+        }
+    }
+
+    void CaptureFrame()
+    {
+        // Capture RGB + Segmentation
+        string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        ScreenCapture.CaptureScreenshot($"captures/rgb_{timestamp}.png");
+
+        Debug.Log($"Frame captured: rgb_{timestamp}.png");
+    }
+}
+```
+
+## Best Practices
+
+### 1. Project Structure
+
+```
+RobotVisualization/
+├── Assets/
+│   ├── Robots/
+│   │   ├── URDF/
+│   │   └── Prefabs/
+│   ├── Scripts/
+│   │   ├── ROS/
+│   │   ├── Controllers/
+│   │   └── UI/
+│   ├── Scenes/
+│   │   ├── MainVisualization.unity
+│   │   └── VRScene.unity
+│   └── Materials/
+├── Packages/
+│   └── com.unity.robotics.ros-tcp-connector/
+└── ProjectSettings/
+```
+
+### 2. Use Universal Render Pipeline (URP)
+
+- Better performance than HDRP
+- Supports mobile and VR
+- Configurable quality levels
+
+### 3. Coordinate System Conversion
+
+ROS uses **ROS coordinates** (X-forward, Z-up), Unity uses **Unity coordinates** (Z-forward, Y-up).
+
+```csharp
+// Use ROSGeometry extension
+using Unity.Robotics.ROSTCPConnector.ROSGeometry;
+
+Vector3 rosPosition = new Vector3(1, 2, 3);
+Vector3 unityPosition = rosPosition.From<FLU>();  // FLU = Forward-Left-Up (ROS)
+```
+
+### 4. Debug ROS Messages
+
+```csharp
+// Log all incoming messages
+ROSConnection.GetOrCreateInstance().ListenForTopics(
+    new string[] { "joint_states", "cmd_vel" },
+    (topic, msg) => Debug.Log($"[{topic}] {msg}")
+);
+```
+
+## Real-World Use Cases
+
+### 1. Digital Twin Dashboard
+
+- Live robot telemetry in 3D
+- Interactive controls
+- Performance metrics overlay
+- Multi-robot coordination view
+
+### 2. VR Training Simulator
+
+- Operator training without real robot
+- Dangerous scenario practice
+- Hand tracking for manipulation
+- Physics-based interaction
+
+### 3. Marketing Demos
+
+- Photorealistic product shots
+- Animated feature showcases
+- Interactive web builds (WebGL)
+- AR mobile apps
+
+## Summary
+
+In this chapter, you've learned:
+- ✅ Unity Robotics Hub architecture and setup
+- ✅ Importing URDF models into Unity
+- ✅ Bidirectional ROS 2 communication (pub/sub)
+- ✅ Camera streaming and sensor visualization
+- ✅ VR integration for immersive control
+- ✅ Synthetic data generation for ML
+- ✅ Performance optimization techniques
+
+**Unity + ROS 2 = Powerful Combination:**
+- Gazebo for physics → Unity for presentation
+- ROS 2 for control → Unity for visualization
+- Simulation for testing → Unity for deployment demos
+
+**Next**: In Chapter 8, we'll explore **NVIDIA Isaac Sim**, combining the best of physics simulation and photorealistic rendering in one platform.
+
+---
+
+<ChatRAG
+  placeholder="Ask me about Unity-ROS 2 integration, VR robotics, rendering, or synthetic data..."
+  useRealAPI={false}
+  messageLimit={10}
+  resetLimitDaily={true}
+/>
+
+## Further Resources
+
+- [Unity Robotics Hub GitHub](https://github.com/Unity-Technologies/Unity-Robotics-Hub)
+- [ROS-TCP-Connector Documentation](https://github.com/Unity-Technologies/ROS-TCP-Connector)
+- [Unity XR Documentation](https://docs.unity3d.com/Manual/XR.html)
+- [Unity Perception Package](https://github.com/Unity-Technologies/com.unity.perception)
+- [URDF Importer Tutorial](https://github.com/Unity-Technologies/URDF-Importer)

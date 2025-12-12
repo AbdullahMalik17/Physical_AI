@@ -19,8 +19,9 @@ const features: FeatureCardProps[] = [
   },
   {
     icon: '💬',
-    title: 'RAG Chatbot',
-    description: 'Ask questions and get context-aware answers from the textbook content using advanced AI (coming soon).',
+    title: 'AI-Powered RAG Chatbot',
+    description: 'Ask questions and get intelligent, context-aware answers from the textbook content with source citations.',
+    link: '/part1-fundamentals/chapter3-ros2-architecture',
   },
 ];
 
