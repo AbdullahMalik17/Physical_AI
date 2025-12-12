@@ -2,7 +2,25 @@ node_modules/
 dist/
 build/
 *.log
+
+# Environment variables - NEVER COMMIT THESE!
+.env
 .env*
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
+**/.env
+**/.env.*
+
+# API Keys and Secrets
+*.pem
+*.key
+secrets/
+secrets.json
+credentials.json
+
 .DS_Store
 Thumbs.db
 *.tmp
