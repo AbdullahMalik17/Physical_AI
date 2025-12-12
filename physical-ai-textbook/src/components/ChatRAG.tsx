@@ -15,9 +15,95 @@ interface Message {
   sources?: string[];
 }
 
+// Helper component for code blocks with copy button
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={{ position: 'relative', marginTop: '12px', marginBottom: '12px' }}>
+      <pre
+        style={{
+          background: '#1e293b',
+          color: '#e2e8f0',
+          padding: '16px',
+          borderRadius: '8px',
+          overflow: 'auto',
+          fontSize: '13px',
+          lineHeight: '1.6',
+          fontFamily: '"Fira Code", "Consolas", "Monaco", monospace',
+        }}
+      >
+        <code>{code}</code>
+      </pre>
+      <button
+        onClick={handleCopy}
+        style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          background: 'rgba(148, 163, 184, 0.1)',
+          border: '1px solid rgba(148, 163, 184, 0.2)',
+          borderRadius: '6px',
+          padding: '6px 10px',
+          fontSize: '12px',
+          color: '#94a3b8',
+          cursor: 'pointer',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(148, 163, 184, 0.2)';
+          e.currentTarget.style.color = '#f1f5f9';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(148, 163, 184, 0.1)';
+          e.currentTarget.style.color = '#94a3b8';
+        }}
+      >
+        {copied ? '✓ Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+// Helper to render message content with code blocks
+function MessageContent({ content }: { content: string }) {
+  const parts = content.split(/(```[\s\S]*?```)/g);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('```') && part.endsWith('```')) {
+          const codeContent = part.slice(3, -3).trim();
+          const lines = codeContent.split('\n');
+          const language = lines[0];
+          const code = lines.length > 1 ? lines.slice(1).join('\n') : codeContent;
+          return <CodeBlock key={index} code={code} language={language} />;
+        }
+
+        // Format **bold** text
+        const formatted = part.split(/(\*\*.*?\*\*)/g).map((segment, i) => {
+          if (segment.startsWith('**') && segment.endsWith('**')) {
+            return <strong key={i}>{segment.slice(2, -2)}</strong>;
+          }
+          return segment;
+        });
+
+        return <span key={index}>{formatted}</span>;
+      })}
+    </>
+  );
+}
+
 export default function ChatRAG({
   context,
-  placeholder = "Message AI Assistant...",
+  placeholder = "Ask about Physical AI, ROS 2, sensors...",
   useRealAPI = true,
   messageLimit,
   resetLimitDaily = false,
@@ -77,7 +163,7 @@ export default function ChatRAG({
     if (messageLimit && messageCount >= messageLimit) {
       const limitMessage: Message = {
         role: 'assistant',
-        content: `You've reached your daily question limit. Please come back tomorrow! 🌟`,
+        content: `You've reached your daily question limit. Please come back tomorrow!`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, limitMessage]);
@@ -143,91 +229,126 @@ export default function ChatRAG({
   };
 
   return (
-    <div className="tw-my-12 tw-mx-auto tw-max-w-5xl">
-      {/* Professional Header */}
-      <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-px-2">
-        <div className="tw-flex tw-items-center tw-gap-3">
-          <div className="tw-w-10 tw-h-10 tw-rounded-lg tw-bg-gradient-to-br tw-from-indigo-500 tw-to-purple-600 tw-flex tw-items-center tw-justify-center tw-shadow-sm">
-            <svg className="tw-w-6 tw-h-6 tw-text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="tw-text-lg tw-font-semibold tw-text-gray-900 dark:tw-text-white tw-m-0">
-              AI Assistant
-            </h3>
-            <p className="tw-text-xs tw-text-gray-500 dark:tw-text-gray-400 tw-m-0">
-              {apiStatus === 'available' ? 'Live RAG System' : apiStatus === 'checking' ? 'Checking...' : 'Smart Assistant Ready'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Chat Container - Clean White Background */}
-      <div className="tw-bg-white dark:tw-bg-gray-900 tw-rounded-2xl tw-shadow-2xl tw-border-2 tw-border-gray-100 dark:tw-border-gray-800 tw-overflow-hidden" style={{ boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)' }}>
-        {/* Messages Area - Clean White Background */}
-        <div className="tw-h-[500px] tw-overflow-y-auto tw-px-6 tw-py-6 tw-bg-gradient-to-b tw-from-white tw-to-gray-50 dark:tw-from-gray-900 dark:tw-to-gray-900">
+    <div className="tw-flex tw-flex-col" style={{ height: '100%', fontFamily: 'system-ui, -apple-system, "Inter", sans-serif' }}>
+      {/* Chat Container */}
+      <div className="tw-flex tw-flex-col tw-overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
+        {/* Messages Area */}
+        <div className="tw-overflow-y-auto tw-px-6 tw-py-6" style={{ flex: 1, minHeight: 0 }}>
           {messages.length === 0 ? (
             <div className="tw-h-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-text-center tw-px-4">
-              <div className="tw-w-20 tw-h-20 tw-rounded-2xl tw-bg-gradient-to-br tw-from-indigo-500 tw-to-purple-600 tw-flex tw-items-center tw-justify-center tw-mb-6 tw-shadow-xl tw-transform tw-rotate-3">
-                <svg className="tw-w-10 tw-h-10 tw-text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '16px',
+                background: 'rgba(100, 116, 139, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '20px',
+                fontSize: '32px'
+              }}>
+                🤖
               </div>
-              <h4 className="tw-text-2xl tw-font-bold tw-text-gray-900 dark:tw-text-white tw-mb-3">
-                Ask me anything!
+              <h4 style={{
+                fontSize: '18px',
+                fontWeight: 600,
+                color: '#1e293b',
+                marginBottom: '8px',
+                fontFamily: 'system-ui, -apple-system, sans-serif'
+              }}>
+                How can I help you?
               </h4>
-              <p className="tw-text-base tw-text-gray-600 dark:tw-text-gray-400 tw-max-w-md tw-mb-4">
-                I can help you learn about Physical AI, ROS 2, Gazebo, Unity, sensors, and robotics concepts.
+              <p style={{
+                fontSize: '14px',
+                color: '#64748b',
+                maxWidth: '320px',
+                lineHeight: '1.5',
+                fontFamily: 'system-ui, -apple-system, sans-serif'
+              }}>
+                Ask me about Physical AI, ROS 2, sensors, Gazebo, Unity, or robotics concepts.
               </p>
-              <div className="tw-flex tw-flex-wrap tw-gap-2 tw-justify-center tw-mt-4">
-                <span className="tw-px-3 tw-py-1 tw-bg-indigo-50 dark:tw-bg-indigo-900/20 tw-text-indigo-700 dark:tw-text-indigo-300 tw-text-xs tw-rounded-full tw-font-medium">ROS 2</span>
-                <span className="tw-px-3 tw-py-1 tw-bg-purple-50 dark:tw-bg-purple-900/20 tw-text-purple-700 dark:tw-text-purple-300 tw-text-xs tw-rounded-full tw-font-medium">Sensors</span>
-                <span className="tw-px-3 tw-py-1 tw-bg-pink-50 dark:tw-bg-pink-900/20 tw-text-pink-700 dark:tw-text-pink-300 tw-text-xs tw-rounded-full tw-font-medium">Gazebo</span>
-                <span className="tw-px-3 tw-py-1 tw-bg-blue-50 dark:tw-bg-blue-900/20 tw-text-blue-700 dark:tw-text-blue-300 tw-text-xs tw-rounded-full tw-font-medium">Unity</span>
-              </div>
             </div>
           ) : (
             <div className="tw-space-y-6">
               {messages.map((message, index) => (
                 <div
                   key={index}
-                  className={`tw-flex tw-gap-4 tw-group ${
+                  className={`tw-flex tw-gap-4 ${
                     message.role === 'user' ? 'tw-justify-end' : 'tw-justify-start'
                   }`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="tw-flex-shrink-0 tw-w-8 tw-h-8 tw-rounded-lg tw-bg-gradient-to-br tw-from-indigo-500 tw-to-purple-600 tw-flex tw-items-center tw-justify-center">
-                      <svg className="tw-w-5 tw-h-5 tw-text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
+                    <div style={{
+                      flexShrink: 0,
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '10px',
+                      background: 'rgba(100, 116, 139, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '18px',
+                      marginTop: '2px'
+                    }}>
+                      🤖
                     </div>
                   )}
 
-                  <div className={`tw-flex-1 tw-max-w-3xl ${message.role === 'user' ? 'tw-flex tw-justify-end' : ''}`}>
-                    <div className={`tw-group ${message.role === 'user' ? 'tw-max-w-2xl' : 'tw-w-full'}`}>
-                      <div className={`tw-rounded-2xl tw-px-5 tw-py-4 ${
-                        message.role === 'user'
-                          ? 'tw-bg-indigo-600 tw-text-white tw-shadow-md'
-                          : 'tw-bg-gray-50 dark:tw-bg-gray-800 tw-text-gray-900 dark:tw-text-gray-100'
-                      }`}>
-                        <div className="tw-prose tw-prose-sm dark:tw-prose-invert tw-max-w-none">
-                          <p className="tw-m-0 tw-whitespace-pre-wrap tw-leading-relaxed">
-                            {message.content}
-                          </p>
+                  <div className="tw-flex-1" style={{ maxWidth: message.role === 'user' ? '80%' : '100%' }}>
+                    {message.role === 'user' ? (
+                      /* User message - Dark pill */
+                      <div style={{
+                        marginLeft: 'auto',
+                        maxWidth: '100%',
+                        display: 'inline-block',
+                      }}>
+                        <div style={{
+                          background: '#1e293b',
+                          color: '#f1f5f9',
+                          padding: '12px 18px',
+                          borderRadius: '20px',
+                          fontSize: '14.5px',
+                          lineHeight: '1.5',
+                          fontFamily: 'system-ui, -apple-system, sans-serif',
+                          wordBreak: 'break-word',
+                        }}>
+                          {message.content}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Bot message - No bubble, direct text */
+                      <div>
+                        <div style={{
+                          color: '#1e293b',
+                          fontSize: '14.5px',
+                          lineHeight: '1.7',
+                          fontFamily: 'system-ui, -apple-system, sans-serif',
+                        }}>
+                          <MessageContent content={message.content} />
                         </div>
 
                         {message.sources && message.sources.length > 0 && (
-                          <div className="tw-mt-4 tw-pt-4 tw-border-t tw-border-gray-200 dark:tw-border-gray-700">
-                            <p className="tw-text-xs tw-font-medium tw-text-gray-700 dark:tw-text-gray-300 tw-mb-2 tw-flex tw-items-center tw-gap-1">
-                              <svg className="tw-w-3 tw-h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
-                              </svg>
-                              Sources
+                          <div style={{
+                            marginTop: '12px',
+                            paddingTop: '12px',
+                            borderTop: '1px solid rgba(148, 163, 184, 0.2)'
+                          }}>
+                            <p style={{
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: '#64748b',
+                              marginBottom: '6px',
+                              fontFamily: 'system-ui, -apple-system, sans-serif'
+                            }}>
+                              📚 Sources
                             </p>
                             <div className="tw-space-y-1">
                               {message.sources.map((source, i) => (
-                                <div key={i} className="tw-text-xs tw-text-gray-600 dark:tw-text-gray-400">
+                                <div key={i} style={{
+                                  fontSize: '12px',
+                                  color: '#475569',
+                                  fontFamily: 'system-ui, -apple-system, sans-serif'
+                                }}>
                                   • {source}
                                 </div>
                               ))}
@@ -235,39 +356,39 @@ export default function ChatRAG({
                           </div>
                         )}
                       </div>
-                      <div className={`tw-text-xs tw-text-gray-500 dark:tw-text-gray-500 tw-mt-1.5 tw-px-1 ${
-                        message.role === 'user' ? 'tw-text-right' : 'tw-text-left'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
+                    )}
                   </div>
-
-                  {message.role === 'user' && (
-                    <div className="tw-flex-shrink-0 tw-w-8 tw-h-8 tw-rounded-lg tw-bg-indigo-600 tw-flex tw-items-center tw-justify-center">
-                      <svg className="tw-w-5 tw-h-5 tw-text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                  )}
                 </div>
               ))}
 
+              {/* Typing Indicator - Pulsing dots */}
               {isLoading && (
                 <div className="tw-flex tw-gap-4">
-                  <div className="tw-flex-shrink-0 tw-w-8 tw-h-8 tw-rounded-lg tw-bg-gradient-to-br tw-from-indigo-500 tw-to-purple-600 tw-flex tw-items-center tw-justify-center">
-                    <svg className="tw-w-5 tw-h-5 tw-text-white tw-animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                  <div style={{
+                    flexShrink: 0,
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '10px',
+                    background: 'rgba(100, 116, 139, 0.12)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                  }}>
+                    🤖
                   </div>
-                  <div className="tw-flex-1">
-                    <div className="tw-bg-gray-50 dark:tw-bg-gray-800 tw-rounded-2xl tw-px-5 tw-py-4 tw-inline-flex tw-items-center tw-gap-2">
-                      <div className="tw-flex tw-gap-1">
-                        <div className="tw-w-2 tw-h-2 tw-bg-indigo-600 tw-rounded-full tw-animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="tw-w-2 tw-h-2 tw-bg-indigo-600 tw-rounded-full tw-animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="tw-w-2 tw-h-2 tw-bg-indigo-600 tw-rounded-full tw-animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
-                    </div>
+                  <div style={{
+                    color: '#64748b',
+                    fontSize: '15px',
+                    paddingTop: '8px',
+                    display: 'flex',
+                    gap: '4px',
+                    fontFamily: '"Fira Code", "Consolas", monospace',
+                    letterSpacing: '2px'
+                  }}>
+                    <span className="tw-animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
+                    <span className="tw-animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
+                    <span className="tw-animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
                   </div>
                 </div>
               )}
@@ -277,8 +398,14 @@ export default function ChatRAG({
           )}
         </div>
 
-        {/* Input Area - Clean White Background */}
-        <div className="tw-border-t-2 tw-border-gray-100 dark:tw-border-gray-800 tw-bg-white dark:tw-bg-gray-900 tw-p-5">
+        {/* Input Area - Prominent Bottom Section */}
+        <div style={{
+          borderTop: '2px solid rgba(148, 163, 184, 0.2)',
+          padding: '18px 20px 20px 20px',
+          flexShrink: 0,
+          background: 'rgba(248, 250, 252, 0.8)',
+          backdropFilter: 'blur(8px)',
+        }}>
           <div className="tw-relative tw-flex tw-items-end tw-gap-3">
             <textarea
               ref={inputRef}
@@ -287,25 +414,71 @@ export default function ChatRAG({
               onKeyPress={handleKeyPress}
               placeholder={messageLimit && messageCount >= messageLimit ? 'Daily limit reached' : placeholder}
               disabled={isLoading || (messageLimit !== undefined && messageCount >= messageLimit)}
-              rows={1}
-              className="tw-flex-1 tw-bg-white dark:tw-bg-gray-800 tw-text-gray-900 dark:tw-text-white tw-rounded-xl tw-px-4 tw-py-3 tw-text-base tw-resize-none focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-indigo-500 tw-transition-all disabled:tw-opacity-50 disabled:tw-cursor-not-allowed tw-border tw-border-gray-300 dark:tw-border-gray-700"
-              style={{ maxHeight: '120px' }}
+              rows={3}
+              style={{
+                flex: 1,
+                background: 'white',
+                color: '#1e293b',
+                borderRadius: '14px',
+                padding: '18px 20px',
+                fontSize: '15px',
+                resize: 'none',
+                outline: 'none',
+                border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                maxHeight: '180px',
+                minHeight: '96px',
+                lineHeight: '1.6',
+                transition: 'all 0.2s',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(30, 41, 59, 0.4)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.25)';
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
+              }}
             />
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim() || (messageLimit !== undefined && messageCount >= messageLimit)}
-              className="tw-flex-shrink-0 tw-bg-indigo-600 hover:tw-bg-indigo-700 tw-text-white tw-font-medium tw-px-5 tw-py-3 tw-rounded-xl tw-transition-all tw-transform hover:tw-scale-105 active:tw-scale-95 disabled:tw-opacity-50 disabled:tw-cursor-not-allowed disabled:tw-transform-none tw-border-0 tw-shadow-sm"
+              style={{
+                flexShrink: 0,
+                background: '#1e293b',
+                color: 'white',
+                fontWeight: 500,
+                padding: '14px 18px',
+                borderRadius: '14px',
+                transition: 'all 0.2s',
+                border: 'none',
+                cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
+                opacity: isLoading || !input.trim() ? 0.5 : 1,
+                minWidth: '48px',
+                minHeight: '48px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: isLoading || !input.trim() ? '0 1px 3px rgba(0, 0, 0, 0.1)' : '0 2px 6px rgba(30, 41, 59, 0.3)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading && input.trim()) {
+                  e.currentTarget.style.background = '#334155';
+                  e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(30, 41, 59, 0.4)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#1e293b';
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                e.currentTarget.style.boxShadow = '0 2px 6px rgba(30, 41, 59, 0.3)';
+              }}
             >
-              {isLoading ? (
-                <svg className="tw-animate-spin tw-h-5 tw-w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="tw-opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="tw-opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg className="tw-w-5 tw-h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              )}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
             </button>
           </div>
         </div>
@@ -339,7 +512,6 @@ async function callRAGAPI(
 
   const data = await response.json();
 
-  // Format sources from API response
   const formattedSources = data.sources?.map((source: any) => {
     if (typeof source === 'string') return source;
     return `${source.title} (${source.chapter})`;
@@ -366,49 +538,14 @@ async function simulateRAGResponse(question: string, context?: string): Promise<
     if (q.includes('service')) {
       return '**Services** provide synchronous request-response communication in ROS 2.\n\n**Characteristics:**\n• Client-server model\n• Blocking call (waits for response)\n• One-to-one communication\n• Best for occasional operations\n\n**Example:**\n```python\n# Server\nself.srv = self.create_service(AddTwoInts, \'add_ints\', self.handle_service)\n\n# Client\nclient = self.create_client(AddTwoInts, \'add_ints\')\nresponse = client.call(request)\n```\n\n**Use When:** You need request-response pattern (calculations, queries, configuration)\n\n📚 Source: Chapter 5 - Communication Patterns';
     }
-    if (q.includes('dds')) {
-      return '**DDS (Data Distribution Service)** is the middleware foundation of ROS 2.\n\n**Why DDS?**\n• OMG industry standard for real-time systems\n• Peer-to-peer architecture (no master node!)\n• Built-in discovery protocol\n• Advanced QoS (Quality of Service) policies\n• Enterprise-grade security\n\n**Popular DDS Implementations:**\n• Fast DDS (default in ROS 2 Humble)\n• CycloneDDS (high performance)\n• Connext DDS (commercial, ultra-reliable)\n\n**Switch DDS:**\n```bash\nexport RMW_IMPLEMENTATION=rmw_cyclonedds_cpp\n```\n\n📚 Source: Chapter 3 - ROS 2 Architecture';
-    }
-    if (q.includes('package')) {
-      return '**ROS 2 Packages** are the organizational units for ROS 2 code.\n\n**Package Structure:**\n```\nmy_robot_package/\n├── package.xml      # Package metadata\n├── setup.py         # Python setup\n├── my_robot_package/\n│   ├── __init__.py\n│   └── my_node.py   # Your nodes\n├── launch/          # Launch files\n├── config/          # Config files\n└── test/            # Unit tests\n```\n\n**Create Package:**\n```bash\nros2 pkg create --build-type ament_python my_robot_package\n```\n\n**Build:**\n```bash\ncolcon build --packages-select my_robot_package\n```\n\n📚 Source: Chapter 4 - Building ROS 2 Packages';
-    }
     return 'ROS 2 is a **middleware framework** for building robot applications.\n\n**Key Improvements over ROS 1:**\n• No master node (decentralized)\n• Real-time support via DDS\n• Built-in security (DDS Security)\n• Multi-platform (Linux, Windows, macOS)\n• Better lifecycle management\n\n**Core Concepts:**\n• **Nodes** - Computational processes\n• **Topics** - Pub/sub messaging\n• **Services** - Request/response\n• **Actions** - Long-running tasks\n• **Parameters** - Configuration\n\n📚 Source: Chapter 3 - ROS 2 Architecture & Core Concepts';
   }
 
   // Sensors
   if (q.includes('lidar') || q.includes('laser')) {
-    return '**LiDAR (Light Detection and Ranging)** uses laser pulses to measure distances and create 3D maps.\n\n**How it Works:**\n1. Emits laser pulse\n2. Measures time for reflection\n3. Calculates: distance = (speed of light × time) / 2\n\n**Types:**\n• **2D LiDAR:** Planar scanning (e.g., SICK, Hokuyo)\n• **3D LiDAR:** Full 360° point clouds (e.g., Velodyne)\n\n**Applications:**\n• Obstacle detection (range: 0.1m - 100m+)\n• SLAM (Simultaneous Localization and Mapping)\n• Autonomous navigation\n• 3D environment reconstruction\n\n**In Gazebo:**\n```xml\n<sensor name="lidar" type="ray">\n  <ray>\n    <scan>\n      <horizontal>\n        <samples>360</samples>\n        <min_angle>-3.14159</min_angle>\n        <max_angle>3.14159</max_angle>\n      </horizontal>\n    </scan>\n    <range>\n      <min>0.12</min>\n      <max>10.0</max>\n    </range>\n  </ray>\n</sensor>\n```\n\n📚 Source: Chapter 2 - Sensor Systems, Chapter 6 - Gazebo Simulation';
-  }
-
-  if (q.includes('imu') || q.includes('inertial')) {
-    return '**IMU (Inertial Measurement Unit)** combines multiple sensors for motion tracking.\n\n**Components:**\n1. **Accelerometer** - Linear acceleration (m/s²)\n2. **Gyroscope** - Angular velocity (rad/s)\n3. **Magnetometer** - Magnetic field (compass heading)\n\n**Common Uses:**\n• Robot balance and stability\n• Orientation estimation\n• State estimation (with Kalman filtering)\n• Complementary to GPS/wheel odometry\n\n**Challenges:**\n• Drift over time (especially gyroscope)\n• Sensitive to vibrations\n• Needs sensor fusion for accuracy\n\n**Sensor Fusion:**\n```python\n# Combine IMU with wheel odometry\nfilter = ExtendedKalmanFilter()\nfilter.update(imu_data, odom_data)\npose = filter.get_state()\n```\n\n**Gazebo IMU Plugin:**\n```xml\n<sensor name="imu_sensor" type="imu">\n  <update_rate>100</update_rate>\n  <plugin filename="libgazebo_ros_imu_sensor.so"/>\n</sensor>\n```\n\n📚 Source: Chapter 2 - Sensor Systems, Chapter 6 - Gazebo';
-  }
-
-  if (q.includes('camera') || q.includes('vision')) {
-    return '**Cameras** are essential for robot perception and visual processing.\n\n**Types:**\n• **RGB Cameras** - Standard color imaging\n• **Depth Cameras** - Distance per pixel (RealSense, Kinect)\n• **Stereo Cameras** - Depth via disparity\n• **Event Cameras** - High-speed motion detection\n\n**Key Parameters:**\n• Resolution (e.g., 640x480, 1920x1080)\n• FPS (frames per second)\n• FOV (field of view)\n• Exposure, gain, white balance\n\n**Common Tasks:**\n• Object detection (YOLO, Faster R-CNN)\n• Semantic segmentation\n• Visual SLAM\n• QR code / AprilTag detection\n\n**Gazebo Camera:**\n```xml\n<sensor name="camera" type="camera">\n  <camera>\n    <horizontal_fov>1.047</horizontal_fov>\n    <image>\n      <width>640</width>\n      <height>480</height>\n    </image>\n  </camera>\n  <plugin filename="libgazebo_ros_camera.so"/>\n</sensor>\n```\n\n📚 Source: Chapter 2 - Sensors, Chapter 6 - Gazebo';
-  }
-
-  // Gazebo Simulation
-  if (q.includes('gazebo') || q.includes('simulation')) {
-    if (q.includes('urdf')) {
-      return '**URDF (Unified Robot Description Format)** defines robot kinematics and dynamics in XML.\n\n**Key Elements:**\n• **Links** - Rigid bodies (chassis, wheels, sensors)\n• **Joints** - Connections between links\n• **Visuals** - Appearance (meshes, colors)\n• **Collisions** - Simplified geometry for physics\n• **Inertials** - Mass, center of mass, inertia matrix\n\n**Joint Types:**\n• `fixed` - No movement\n• `revolute` - Rotation with limits\n• `continuous` - Infinite rotation (wheels)\n• `prismatic` - Linear motion\n\n**Example:**\n```xml\n<link name="base_link">\n  <visual>\n    <geometry>\n      <box size="0.6 0.4 0.2"/>\n    </geometry>\n  </visual>\n  <inertial>\n    <mass value="15.0"/>\n    <inertia ixx="0.13" iyy="0.21" izz="0.13"/>\n  </inertial>\n</link>\n\n<joint name="wheel_joint" type="continuous">\n  <parent link="base_link"/>\n  <child link="wheel_link"/>\n  <axis xyz="0 0 1"/>\n</joint>\n```\n\n📚 Source: Chapter 6 - Gazebo Simulation Environment';
-    }
-    if (q.includes('sdf')) {
-      return '**SDF (Simulation Description Format)** is Gazebo\'s native format, more powerful than URDF.\n\n**Advantages over URDF:**\n• Multiple robots in one file\n• Lights, cameras, and sensors\n• Physics engine parameters\n• Plugin configurations\n• Nested models\n\n**World File Structure:**\n```xml\n<sdf version="1.8">\n  <world name="my_world">\n    <!-- Physics -->\n    <physics type="ode">\n      <max_step_size>0.001</max_step_size>\n      <real_time_factor>1.0</real_time_factor>\n    </physics>\n    \n    <!-- Models -->\n    <include>\n      <uri>model://my_robot</uri>\n    </include>\n    \n    <!-- Lights -->\n    <light name="sun" type="directional"/>\n  </world>\n</sdf>\n```\n\n📚 Source: Chapter 6 - Gazebo Simulation';
-    }
-    return '**Gazebo** is the industry-standard robot simulator for physics-based testing.\n\n**Key Features:**\n• High-fidelity physics (ODE, Bullet, DART, Simbody)\n• Sensor simulation (cameras, LiDAR, IMU, GPS)\n• ROS 2 integration via ros_gz_bridge\n• Plugin system for custom behaviors\n• Large model library\n\n**Why Simulate?**\n• Test dangerous scenarios safely\n• Rapid iteration (no hardware setup)\n• Reproducible experiments\n• Parallel testing (multiple scenarios)\n• Synthetic data generation for ML\n\n**Quick Start:**\n```bash\n# Install\nsudo apt install ros-humble-gazebo-ros-pkgs\n\n# Launch\nros2 launch gazebo_ros gazebo.launch.py\n```\n\n📚 Source: Chapter 6 - Gazebo Simulation Environment';
-  }
-
-  // Unity
-  if (q.includes('unity')) {
-    return '**Unity** brings photorealistic rendering and VR/AR to robotics.\n\n**Unity vs Gazebo:**\n• **Gazebo:** Physics simulation (research-grade)\n• **Unity:** Rendering & visualization (game-grade)\n• **Best Practice:** Gazebo for physics, Unity for presentation!\n\n**Unity Robotics Hub:**\n• ROS-TCP-Connector (Unity package)\n• ROS-TCP-Endpoint (ROS 2 server)\n• URDF Importer\n• TF visualization\n\n**Use Cases:**\n• Marketing demos (photorealistic)\n• VR/AR training simulators\n• Human-robot interaction research\n• Digital twins\n• Synthetic data generation\n\n**Setup:**\n```bash\n# Unity side\nWindow → Package Manager → Add from git URL:\nhttps://github.com/Unity-Technologies/ROS-TCP-Connector.git\n\n# ROS 2 side\nros2 run ros_tcp_endpoint default_server_endpoint\n```\n\n**Publish from Unity:**\n```csharp\nROSConnection.GetOrCreateInstance()\n    .Publish("cmd_vel", twist);\n```\n\n📚 Source: Chapter 7 - Unity for Robot Visualization';
-  }
-
-  // Physical AI / Embodied Intelligence
-  if (q.includes('physical ai') || q.includes('embodied')) {
-    return '**Physical AI (Embodied Intelligence)** bridges digital intelligence with the physical world.\n\n**Key Concepts:**\n• **Embodiment:** AI that interacts with the real world via sensors and actuators\n• **Situated Cognition:** Intelligence emerges from body-environment interaction\n• **Morphological Computation:** Physical structure aids computation\n\n**Why It Matters:**\n• Traditional AI works in digital spaces (games, text, images)\n• Physical AI must handle real-world uncertainty, physics, and dynamics\n• Critical for robotics, autonomous vehicles, industrial automation\n\n**Challenges:**\n• Sim-to-real transfer\n• Safety and reliability\n• Real-time constraints\n• Multi-modal sensor fusion\n\n**Examples:**\n• Humanoid robots (Atlas, Optimus)\n• Autonomous vehicles (Waymo, Tesla)\n• Warehouse robots (Amazon Kiva)\n• Surgical robots (Da Vinci)\n\n📚 Source: Chapter 1 - Introduction to Embodied Intelligence';
+    return '**LiDAR (Light Detection and Ranging)** uses laser pulses to measure distances and create 3D maps.\n\n**How it Works:**\n1. Emits laser pulse\n2. Measures time for reflection\n3. Calculates: distance = (speed of light × time) / 2\n\n**Types:**\n• **2D LiDAR:** Planar scanning (e.g., SICK, Hokuyo)\n• **3D LiDAR:** Full 360° point clouds (e.g., Velodyne)\n\n**Applications:**\n• Obstacle detection (range: 0.1m - 100m+)\n• SLAM (Simultaneous Localization and Mapping)\n• Autonomous navigation\n\n**In Gazebo:**\n```xml\n<sensor name="lidar" type="ray">\n  <ray>\n    <scan>\n      <horizontal>\n        <samples>360</samples>\n        <min_angle>-3.14159</min_angle>\n        <max_angle>3.14159</max_angle>\n      </horizontal>\n    </scan>\n  </ray>\n</sensor>\n```\n\n📚 Source: Chapter 2 - Sensor Systems';
   }
 
   // General helpful response
-  return '**I can help you learn about:**\n\n🤖 **ROS 2 Fundamentals**\n• Nodes, Topics, Services, Actions\n• DDS middleware and QoS\n• Package creation and management\n\n📡 **Sensors & Perception**\n• LiDAR, cameras, IMU, GPS\n• Sensor fusion techniques\n• SLAM and localization\n\n🎮 **Simulation**\n• Gazebo (URDF, SDF, physics)\n• Unity (visualization, VR/AR)\n• Sensor simulation\n\n**Try asking:**\n• "What is a ROS 2 node?"\n• "How does LiDAR work?"\n• "Explain URDF format"\n• "What is Unity Robotics Hub?"\n• "How do I create a ROS 2 package?"\n\nType your question above! 👆';
+  return '**I can help you learn about:**\n\n🤖 **ROS 2 Fundamentals**\n• Nodes, Topics, Services, Actions\n• DDS middleware and QoS\n• Package creation and management\n\n📡 **Sensors & Perception**\n• LiDAR, cameras, IMU, GPS\n• Sensor fusion techniques\n• SLAM and localization\n\n🎮 **Simulation**\n• Gazebo (URDF, SDF, physics)\n• Unity (visualization, VR/AR)\n• Sensor simulation\n\n**Try asking:**\n• "What is a ROS 2 node?"\n• "How does LiDAR work?"\n• "Explain URDF format"';
 }
