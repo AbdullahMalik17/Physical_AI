@@ -40,7 +40,33 @@ const sidebars: SidebarsConfig = {
         'part2-simulation/chapter7-unity',
       ],
     },
-    // Part 3 will be added in future milestones
+    {
+      type: 'category',
+      label: 'Part 3: NVIDIA Isaac & Navigation',
+      collapsed: false,
+      items: [
+        'part3-nvidia-isaac/chapter8-isaac-sim',
+        'part3-nvidia-isaac/chapter9-isaac-ros',
+        'part3-nvidia-isaac/chapter10-nav2',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Part 4: Humanoid Robotics',
+      collapsed: false,
+      items: [
+        'part4-humanoid-robotics/chapter11-kinematics-dynamics',
+        'part4-humanoid-robotics/chapter12-bipedal-locomotion',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Part 5: Cognitive Robotics',
+      collapsed: false,
+      items: [
+        'part5-cognitive-robotics/chapter13-vla-models',
+      ],
+    },
   ],
 };
 

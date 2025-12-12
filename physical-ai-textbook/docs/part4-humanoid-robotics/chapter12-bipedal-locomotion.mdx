@@ -1,0 +1,801 @@
+---
+id: chapter12-bipedal-locomotion
+title: "Chapter 12: Bipedal Locomotion & Balance"
+sidebar_position: 12
+description: "Master Zero Moment Point (ZMP) theory, center of mass control, gait generation, balance recovery, and terrain adaptation for humanoid robots"
+keywords: [bipedal locomotion, ZMP, center of mass, gait generation, balance control, walking, humanoid, stability, fall detection]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatRAG from '@site/src/components/ChatRAG';
+
+# Chapter 12: Bipedal Locomotion & Balance
+
+<RobotStatus status="online" label="Humanoid Walking Active" />
+
+## Introduction
+
+**Bipedal locomotion** is the hallmark of humanoid robotics and one of the most challenging control problems in robotics. Unlike wheeled robots with inherently stable bases, humanoids must continuously manage their center of mass (CoM), zero moment point (ZMP), and foot placement to avoid falling.
+
+**Why Bipedal Walking Matters:**
+- **Human Environments:** Navigate stairs, uneven terrain, narrow corridors
+- **Energy Efficiency:** Passive dynamics can reduce energy consumption by 50%+
+- **Social Acceptance:** Human-like motion for assistive and service robots
+- **Versatility:** Climb, crouch, kick, dance – capabilities wheeled robots cannot achieve
+
+**Real-World Humanoids:**
+- **Boston Dynamics Atlas:** Parkour, backflips, dynamic balance
+- **Tesla Optimus:** Factory automation, household tasks
+- **ASIMO (Honda):** Stair climbing, running at 9 km/h
+- **Digit (Agility Robotics):** Package delivery, warehouse logistics
+
+**Challenges:**
+- **Underactuation:** Robots have fewer actuators than DOF in flight phase
+- **Hybrid Dynamics:** Continuous motion + discrete foot contacts (impact forces)
+- **Model Uncertainty:** Floor friction, actuator delays, external disturbances
+- **Real-Time Constraints:** Balance corrections must happen in <10ms
+
+---
+
+## Balance Fundamentals
+
+### Center of Mass (CoM)
+
+**Definition:** Weighted average position of all body mass
+
+$$
+\mathbf{r}_{\text{CoM}} = \frac{\sum_i m_i \mathbf{r}_i}{\sum_i m_i}
+$$
+
+Where:
+- $m_i$ = mass of link $i$
+- $\mathbf{r}_i$ = position of link $i$
+
+**For humanoid robot:**
+```python
+def compute_com(self, joint_positions):
+    """Compute center of mass from joint configuration"""
+    total_mass = 0.0
+    com = np.zeros(3)
+
+    for link_id in range(self.num_links):
+        # Get link mass and COM position
+        link_mass = p.getDynamicsInfo(self.robot_id, link_id)[0]
+        link_com_pos = p.getLinkState(self.robot_id, link_id)[0]
+
+        total_mass += link_mass
+        com += link_mass * np.array(link_com_pos)
+
+    com /= total_mass
+    return com
+```
+
+### Zero Moment Point (ZMP)
+
+**Definition:** Point on the ground where the net moment of inertial and gravitational forces equals zero
+
+**Physical Interpretation:**
+- If ZMP is inside support polygon → robot is balanced
+- If ZMP reaches edge → robot starts to tip over
+- If ZMP is outside → robot is falling (unrecoverable without stepping)
+
+**ZMP Equation (Vukobratović, 1972):**
+
+$$
+\mathbf{p}_{\text{ZMP}} = \frac{\sum_i m_i (\ddot{z}_i + g) \mathbf{r}_i - \sum_i \dot{\mathbf{H}}_i}{\sum_i m_i (\ddot{z}_i + g)}
+$$
+
+Where:
+- $\ddot{z}_i$ = vertical acceleration of link $i$
+- $g$ = gravitational acceleration
+- $\mathbf{H}_i$ = angular momentum of link $i$
+
+**Simplified 2D ZMP (constant height CoM):**
+
+$$
+x_{\text{ZMP}} = x_{\text{CoM}} - \frac{z_{\text{CoM}}}{g} \ddot{x}_{\text{CoM}}
+$$
+
+### Support Polygon
+
+**Definition:** Convex hull of all ground contact points
+
+**For humanoid:**
+- **Double support:** Both feet on ground → rectangular polygon
+- **Single support:** One foot on ground → foot outline polygon
+
+```python
+def compute_support_polygon(self, foot_contacts):
+    """Compute convex hull of contact points"""
+    from scipy.spatial import ConvexHull
+
+    if len(foot_contacts) < 3:
+        return None  # Cannot form polygon
+
+    # Extract contact positions (x, y)
+    points = np.array([[c.x, c.y] for c in foot_contacts])
+
+    # Compute convex hull
+    hull = ConvexHull(points)
+    polygon = points[hull.vertices]
+
+    return polygon
+```
+
+### Stability Criteria
+
+**Static Stability (CoM projection):**
+```python
+def is_statically_stable(self, com, support_polygon):
+    """Check if CoM projection is inside support polygon"""
+    com_2d = com[:2]  # Project to ground plane (x, y)
+
+    # Point-in-polygon test (ray casting)
+    from matplotlib.path import Path
+    polygon_path = Path(support_polygon)
+    return polygon_path.contains_point(com_2d)
+```
+
+**Dynamic Stability (ZMP):**
+```python
+def is_dynamically_stable(self, zmp, support_polygon):
+    """Check if ZMP is inside support polygon"""
+    zmp_2d = zmp[:2]
+
+    from matplotlib.path import Path
+    polygon_path = Path(support_polygon)
+
+    # Add safety margin (10% inward)
+    margin = 0.9
+    centroid = support_polygon.mean(axis=0)
+    shrunk_polygon = centroid + margin * (support_polygon - centroid)
+
+    polygon_path = Path(shrunk_polygon)
+    return polygon_path.contains_point(zmp_2d)
+```
+
+---
+
+## Gait Generation
+
+### Walking Cycle Phases
+
+**Single Support Phase (SSP):**
+- One foot on ground (stance foot)
+- Other foot swinging forward (swing foot)
+- Duration: ~60% of cycle
+
+**Double Support Phase (DSP):**
+- Both feet on ground
+- Weight transfer from rear to front foot
+- Duration: ~20% of cycle (each, 2 transitions per cycle)
+
+### Linear Inverted Pendulum Model (LIPM)
+
+**Assumptions:**
+1. CoM height is constant: $z_{\text{CoM}} = h$
+2. All mass concentrated at CoM
+3. Massless telescopic legs
+
+**Equation of motion (2D):**
+
+$$
+\ddot{x}_{\text{CoM}} = \frac{g}{h} (x_{\text{CoM}} - x_{\text{ZMP}})
+$$
+
+**Solution (exponential dynamics):**
+
+$$
+x_{\text{CoM}}(t) = x_{\text{ZMP}} + (x_0 - x_{\text{ZMP}}) \cosh(\omega t) + \frac{\dot{x}_0}{\omega} \sinh(\omega t)
+$$
+
+Where $\omega = \sqrt{g/h}$ is the natural frequency
+
+### Python Implementation: LIPM Walking
+
+```python
+#!/usr/bin/env python3
+import numpy as np
+import matplotlib.pyplot as plt
+
+class LIPMWalking:
+    def __init__(self, com_height=0.8, step_length=0.4, step_duration=0.8):
+        self.h = com_height        # CoM height (m)
+        self.omega = np.sqrt(9.81 / self.h)  # Natural frequency
+        self.step_length = step_length
+        self.step_duration = step_duration
+        self.dsp_ratio = 0.2       # Double support phase ratio
+
+    def lipm_dynamics(self, x0, xd0, x_zmp, t):
+        """
+        Solve LIPM dynamics
+
+        Args:
+            x0: Initial CoM position
+            xd0: Initial CoM velocity
+            x_zmp: ZMP position (constant during phase)
+            t: Time
+
+        Returns:
+            (x_com, xd_com): CoM position and velocity
+        """
+        w = self.omega
+        x_com = x_zmp + (x0 - x_zmp) * np.cosh(w * t) + (xd0 / w) * np.sinh(w * t)
+        xd_com = (x0 - x_zmp) * w * np.sinh(w * t) + xd0 * np.cosh(w * t)
+        return x_com, xd_com
+
+    def generate_footsteps(self, num_steps=10):
+        """Generate footstep positions"""
+        footsteps = []
+        for i in range(num_steps):
+            side = 'left' if i % 2 == 0 else 'right'
+            x = i * self.step_length
+            y = 0.1 if side == 'left' else -0.1  # Foot spacing
+            footsteps.append({'x': x, 'y': y, 'side': side})
+
+        return footsteps
+
+    def generate_zmp_trajectory(self, footsteps):
+        """Generate ZMP trajectory from footsteps"""
+        zmp_x = []
+        zmp_y = []
+        time = []
+
+        t = 0.0
+        for i, step in enumerate(footsteps):
+            # DSP: ZMP between current and next foot
+            if i < len(footsteps) - 1:
+                dsp_duration = self.step_duration * self.dsp_ratio
+                zmp_x_dsp = np.linspace(step['x'], footsteps[i+1]['x'], 20)
+                zmp_y_dsp = np.linspace(step['y'], footsteps[i+1]['y'], 20)
+                time_dsp = np.linspace(t, t + dsp_duration, 20)
+
+                zmp_x.extend(zmp_x_dsp)
+                zmp_y.extend(zmp_y_dsp)
+                time.extend(time_dsp)
+
+                t += dsp_duration
+
+            # SSP: ZMP at current foot
+            ssp_duration = self.step_duration * (1 - 2 * self.dsp_ratio)
+            zmp_x_ssp = [step['x']] * 20
+            zmp_y_ssp = [step['y']] * 20
+            time_ssp = np.linspace(t, t + ssp_duration, 20)
+
+            zmp_x.extend(zmp_x_ssp)
+            zmp_y.extend(zmp_y_ssp)
+            time.extend(time_ssp)
+
+            t += ssp_duration
+
+        return np.array(time), np.array(zmp_x), np.array(zmp_y)
+
+    def simulate_walking(self, num_steps=10):
+        """Simulate LIPM walking"""
+        footsteps = self.generate_footsteps(num_steps)
+        time, zmp_x, zmp_y = self.generate_zmp_trajectory(footsteps)
+
+        # Simulate CoM trajectory
+        x_com = [0.0]
+        xd_com = [0.0]
+        dt = time[1] - time[0]
+
+        for i in range(1, len(time)):
+            x, xd = self.lipm_dynamics(
+                x_com[-1], xd_com[-1], zmp_x[i], dt
+            )
+            x_com.append(x)
+            xd_com.append(xd)
+
+        return time, np.array(x_com), zmp_x, footsteps
+
+    def plot_walking(self):
+        """Visualize walking simulation"""
+        time, x_com, zmp_x, footsteps = self.simulate_walking()
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+
+        # Plot CoM and ZMP trajectories
+        ax1.plot(time, x_com, 'b-', linewidth=2, label='CoM')
+        ax1.plot(time, zmp_x, 'r--', linewidth=2, label='ZMP')
+
+        # Plot footsteps
+        for step in footsteps:
+            ax1.axvline(step['x'] / self.step_length * self.step_duration,
+                       color='gray', linestyle=':', alpha=0.3)
+
+        ax1.set_xlabel('Time (s)')
+        ax1.set_ylabel('Position (m)')
+        ax1.set_title('LIPM Walking: CoM and ZMP Trajectories')
+        ax1.legend()
+        ax1.grid(True)
+
+        # Plot CoM velocity
+        xd_com = np.gradient(x_com, time)
+        ax2.plot(time, xd_com, 'g-', linewidth=2)
+        ax2.set_xlabel('Time (s)')
+        ax2.set_ylabel('Velocity (m/s)')
+        ax2.set_title('CoM Velocity')
+        ax2.grid(True)
+
+        plt.tight_layout()
+        plt.show()
+
+# Example usage
+if __name__ == '__main__':
+    walker = LIPMWalking(com_height=0.8, step_length=0.4, step_duration=0.8)
+    walker.plot_walking()
+```
+
+---
+
+## Advanced Gait Patterns
+
+### Preview Control (Kajita et al., 2003)
+
+**Idea:** Preview future ZMP trajectory and optimize CoM motion
+
+**Cost Function:**
+
+$$
+J = \sum_{i=k}^{k+N} \left[ Q_e (p_{\text{ZMP},i} - p_{\text{ZMP},i}^{\text{ref}})^2 + Q_x \ddot{x}_{\text{CoM},i}^2 \right]
+$$
+
+Minimize:
+- ZMP tracking error (stay balanced)
+- CoM jerk (smooth motion)
+
+**Solution:** Linear Quadratic Regulator (LQR) with preview
+
+```python
+import cvxpy as cp
+
+def preview_control_zmp(zmp_ref, N=100, Q_e=1.0, Q_x=1e-6):
+    """
+    MPC-based ZMP tracking
+
+    Args:
+        zmp_ref: Reference ZMP trajectory (Nx1)
+        N: Preview horizon
+        Q_e: ZMP tracking weight
+        Q_x: Jerk weight
+
+    Returns:
+        x_com: Optimal CoM trajectory
+    """
+    # State: [x_com, xd_com, xdd_com]
+    # Input: x_ddd_com (jerk)
+
+    # Discretized LIPM dynamics (A, B matrices)
+    dt = 0.01
+    omega = np.sqrt(9.81 / 0.8)
+
+    A = np.array([
+        [1, dt, dt**2/2],
+        [0, 1, dt],
+        [0, omega**2, 1]
+    ])
+
+    B = np.array([dt**3/6, dt**2/2, dt]).reshape(-1, 1)
+
+    # Optimization variables
+    x = cp.Variable((3, N+1))  # State trajectory
+    u = cp.Variable((1, N))    # Input trajectory
+
+    # Cost and constraints
+    cost = 0
+    constraints = [x[:, 0] == [0, 0, 0]]  # Initial state
+
+    for k in range(N):
+        # Dynamics
+        constraints += [x[:, k+1] == A @ x[:, k] + B @ u[:, k]]
+
+        # ZMP from CoM (simplified)
+        zmp_k = x[0, k] - (0.8 / 9.81) * x[2, k]
+
+        # Cost
+        cost += Q_e * cp.square(zmp_k - zmp_ref[k])
+        cost += Q_x * cp.square(u[:, k])
+
+    # Solve
+    problem = cp.Problem(cp.Minimize(cost), constraints)
+    problem.solve()
+
+    return x.value[0, :]  # Return CoM trajectory
+```
+
+### Capture Point (Pratt & Tedrake, 2006)
+
+**Definition:** Point where the robot must step to come to a stop
+
+$$
+\mathbf{r}_{\text{CP}} = \mathbf{r}_{\text{CoM}} + \frac{1}{\omega} \dot{\mathbf{r}}_{\text{CoM}}
+$$
+
+**Use case:**
+- Fall detection: If CP is outside reachable footstep region → cannot recover
+- Step planning: Place next foot at CP to decelerate
+
+```python
+def compute_capture_point(self, com_pos, com_vel):
+    """Compute instantaneous capture point"""
+    omega = self.omega
+    cp = com_pos + com_vel / omega
+    return cp
+
+def is_recoverable(self, com_pos, com_vel, foot_pos, max_step_length=0.5):
+    """Check if robot can step to regain balance"""
+    cp = self.compute_capture_point(com_pos, com_vel)
+    distance_to_foot = np.linalg.norm(cp - foot_pos)
+    return distance_to_foot < max_step_length
+```
+
+---
+
+## Fall Detection & Recovery
+
+### Fall Detection Criteria
+
+**1. ZMP Margin:**
+```python
+def zmp_stability_margin(self, zmp, support_polygon):
+    """Distance from ZMP to polygon edge (negative = unstable)"""
+    from shapely.geometry import Point, Polygon
+
+    zmp_point = Point(zmp[:2])
+    support_poly = Polygon(support_polygon)
+
+    if support_poly.contains(zmp_point):
+        # Distance to nearest edge (positive = safe)
+        return zmp_point.distance(support_poly.boundary)
+    else:
+        # Outside polygon (negative = falling)
+        return -zmp_point.distance(support_poly)
+
+def is_falling(self, margin_threshold=0.01):
+    """Detect if robot is falling"""
+    margin = self.zmp_stability_margin(self.zmp, self.support_polygon)
+    return margin < margin_threshold
+```
+
+**2. Angular Momentum:**
+```python
+def compute_angular_momentum(self):
+    """Compute total angular momentum about CoM"""
+    L = np.zeros(3)
+
+    for i in range(self.num_links):
+        # Link linear and angular velocity
+        v_i, omega_i = p.getLinkState(self.robot_id, i, computeLinkVelocity=1)[6:8]
+        m_i = p.getDynamicsInfo(self.robot_id, i)[0]
+        I_i = np.diag(p.getDynamicsInfo(self.robot_id, i)[2])  # Inertia tensor
+
+        # r_i relative to CoM
+        r_i = p.getLinkState(self.robot_id, i)[0] - self.com
+
+        # Angular momentum: L = r × mv + Iω
+        L += np.cross(r_i, m_i * np.array(v_i))
+        L += I_i @ np.array(omega_i)
+
+    return L
+
+def is_angular_momentum_excessive(self, threshold=10.0):
+    """Check if robot is spinning uncontrollably"""
+    L = self.compute_angular_momentum()
+    return np.linalg.norm(L) > threshold
+```
+
+### Recovery Strategies
+
+**1. Ankle Strategy (Small perturbations):**
+```python
+def ankle_strategy_recovery(self, zmp_error):
+    """Torque at ankles to shift ZMP"""
+    # Proportional control
+    K_ankle = 100.0  # N⋅m per meter of ZMP error
+    ankle_torque = -K_ankle * zmp_error
+
+    # Apply torque to both ankles
+    self.apply_joint_torque('left_ankle_pitch', ankle_torque)
+    self.apply_joint_torque('right_ankle_pitch', ankle_torque)
+```
+
+**2. Hip Strategy (Medium perturbations):**
+```python
+def hip_strategy_recovery(self, com_error):
+    """Move hips to shift CoM"""
+    # PD control
+    K_p = 200.0
+    K_d = 20.0
+
+    hip_torque = -K_p * com_error - K_d * self.com_velocity
+
+    self.apply_joint_torque('hip_pitch', hip_torque)
+```
+
+**3. Step Strategy (Large perturbations):**
+```python
+def step_strategy_recovery(self, capture_point):
+    """Take a step to the capture point"""
+    # Determine which foot to step with
+    left_foot_pos = self.get_foot_position('left')
+    right_foot_pos = self.get_foot_position('right')
+
+    dist_left = np.linalg.norm(capture_point - left_foot_pos)
+    dist_right = np.linalg.norm(capture_point - right_foot_pos)
+
+    # Step with closer foot
+    if dist_left < dist_right:
+        self.plan_step('left', capture_point)
+    else:
+        self.plan_step('right', capture_point)
+
+def plan_step(self, foot_side, target_pos):
+    """Plan swing trajectory for foot"""
+    # Cubic Bezier curve for smooth swing
+    t = np.linspace(0, 1, 100)
+    swing_height = 0.05  # 5cm clearance
+
+    start = self.get_foot_position(foot_side)
+    end = target_pos
+
+    # Control points for Bezier curve
+    p0 = start
+    p1 = start + np.array([0, 0, swing_height])
+    p2 = end + np.array([0, 0, swing_height])
+    p3 = end
+
+    # Bezier curve
+    trajectory = (1-t)**3 * p0[:, None] + \
+                 3*(1-t)**2*t * p1[:, None] + \
+                 3*(1-t)*t**2 * p2[:, None] + \
+                 t**3 * p3[:, None]
+
+    return trajectory.T
+```
+
+---
+
+## Terrain Adaptation
+
+### Foot Force Sensing
+
+```python
+def get_foot_contact_forces(self):
+    """Read force sensors on feet"""
+    left_forces = []
+    right_forces = []
+
+    # Get contact points from PyBullet
+    contact_points = p.getContactPoints(self.robot_id)
+
+    for cp in contact_points:
+        link_id = cp[3]
+        normal_force = cp[9]
+
+        if link_id == self.left_foot_id:
+            left_forces.append(normal_force)
+        elif link_id == self.right_foot_id:
+            right_forces.append(normal_force)
+
+    return sum(left_forces), sum(right_forces)
+
+def is_foot_in_contact(self, foot_side, force_threshold=10.0):
+    """Detect foot contact with ground"""
+    left_force, right_force = self.get_foot_contact_forces()
+
+    if foot_side == 'left':
+        return left_force > force_threshold
+    else:
+        return right_force > force_threshold
+```
+
+### Uneven Terrain Walking
+
+```python
+def adjust_gait_for_slope(self, slope_angle):
+    """Modify step length and CoM height for slopes"""
+    # Shorter steps on slopes
+    base_step_length = 0.4
+    step_length = base_step_length * np.cos(slope_angle)
+
+    # Lower CoM for stability
+    base_com_height = 0.8
+    com_height = base_com_height - 0.1 * abs(slope_angle)
+
+    return step_length, com_height
+
+def detect_terrain_slope(self):
+    """Estimate ground slope from foot orientations"""
+    left_foot_orientation = p.getLinkState(self.robot_id, self.left_foot_id)[1]
+    right_foot_orientation = p.getLinkState(self.robot_id, self.right_foot_id)[1]
+
+    # Convert quaternions to Euler angles
+    left_pitch = p.getEulerFromQuaternion(left_foot_orientation)[1]
+    right_pitch = p.getEulerFromQuaternion(right_foot_orientation)[1]
+
+    # Average pitch
+    slope_angle = (left_pitch + right_pitch) / 2.0
+
+    return slope_angle
+```
+
+---
+
+## Whole-Body Control (WBC)
+
+### Task-Space Inverse Dynamics
+
+**Objective:** Control end-effectors (feet, hands) while respecting:
+1. Contact constraints (foot must stay on ground)
+2. Joint limits and torque limits
+3. Balance (ZMP inside support polygon)
+
+**Optimization Problem:**
+
+$$
+\begin{aligned}
+\min_{\ddot{\mathbf{q}}, \boldsymbol{\tau}, \mathbf{f}} \quad & \| \ddot{\mathbf{x}} - \ddot{\mathbf{x}}^{\text{des}} \|^2 + \lambda \| \boldsymbol{\tau} \|^2 \\
+\text{subject to} \quad & \mathbf{M}(\mathbf{q}) \ddot{\mathbf{q}} + \mathbf{h}(\mathbf{q}, \dot{\mathbf{q}}) = \boldsymbol{\tau} + J_c^T \mathbf{f} \\
+& J_c \ddot{\mathbf{q}} + \dot{J}_c \dot{\mathbf{q}} = 0 \quad \text{(contact constraint)} \\
+& \mathbf{f}_z \geq 0 \quad \text{(unilateral force)} \\
+& |\mathbf{f}_x|, |\mathbf{f}_y| \leq \mu \mathbf{f}_z \quad \text{(friction cone)}
+\end{aligned}
+$$
+
+### Python Implementation with OSQP
+
+```python
+import osqp
+from scipy import sparse
+
+def whole_body_control(self, x_des, xd_des, xdd_des):
+    """
+    Quadratic Programming-based WBC
+
+    Args:
+        x_des: Desired end-effector position
+        xd_des: Desired end-effector velocity
+        xdd_des: Desired end-effector acceleration
+
+    Returns:
+        tau: Joint torques
+    """
+    n = self.num_joints
+    m = 3  # Contact forces (x, y, z) per foot
+
+    # Current state
+    q = self.get_joint_positions()
+    qd = self.get_joint_velocities()
+
+    # Dynamics matrices
+    M = self.compute_mass_matrix(q)
+    h = self.compute_nonlinear_effects(q, qd)  # Coriolis + gravity
+    J_foot = self.compute_foot_jacobian(q)
+    Jd_foot = self.compute_foot_jacobian_derivative(q, qd)
+
+    # Task Jacobian (end-effector to joints)
+    J_task = self.compute_task_jacobian(q)
+
+    # QP matrices
+    # min 0.5 x^T P x + q^T x
+    # s.t. l <= Ax <= u
+
+    # Decision variables: x = [ddq, tau, f]
+    x_dim = n + n + m
+
+    # Cost: ||J*ddq + Jd*qd - xdd_des||^2 + lambda*||tau||^2
+    lambda_reg = 0.01
+
+    P = sparse.block_diag([
+        J_task.T @ J_task,
+        lambda_reg * sparse.eye(n),
+        sparse.csc_matrix((m, m))
+    ])
+
+    q_vec = np.concatenate([
+        -J_task.T @ (xdd_des - Jd_foot @ qd),
+        np.zeros(n),
+        np.zeros(m)
+    ])
+
+    # Equality constraints: M*ddq - tau - J_c^T*f = -h
+    A_eq = sparse.hstack([M, -sparse.eye(n), -J_foot.T])
+    l_eq = -h
+    u_eq = -h
+
+    # Contact constraint: J_c*ddq + Jd_c*qd = 0
+    A_contact = sparse.hstack([J_foot, sparse.csc_matrix((3, n)), sparse.csc_matrix((3, m))])
+    l_contact = -Jd_foot @ qd
+    u_contact = -Jd_foot @ qd
+
+    # Friction cone: |f_x|, |f_y| <= mu*f_z, f_z >= 0
+    mu = 0.7  # Friction coefficient
+    A_friction = sparse.csc_matrix([
+        [1, 0, -mu],   # f_x <= mu*f_z
+        [-1, 0, -mu],  # -f_x <= mu*f_z
+        [0, 1, -mu],   # f_y <= mu*f_z
+        [0, -1, -mu],  # -f_y <= mu*f_z
+        [0, 0, -1],    # -f_z <= 0 (f_z >= 0)
+    ])
+    A_friction = sparse.hstack([
+        sparse.csc_matrix((5, n + n)),
+        A_friction
+    ])
+    l_friction = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf])
+    u_friction = np.zeros(5)
+
+    # Stack constraints
+    A = sparse.vstack([A_eq, A_contact, A_friction])
+    l = np.concatenate([l_eq, l_contact, l_friction])
+    u = np.concatenate([u_eq, u_contact, u_friction])
+
+    # Solve QP
+    prob = osqp.OSQP()
+    prob.setup(P, q_vec, A, l, u, verbose=False)
+    res = prob.solve()
+
+    if res.info.status != 'solved':
+        print(f"QP failed: {res.info.status}")
+        return np.zeros(n)
+
+    # Extract solution
+    ddq = res.x[:n]
+    tau = res.x[n:2*n]
+    f = res.x[2*n:]
+
+    return tau
+```
+
+---
+
+## Real-World Examples
+
+### Boston Dynamics Atlas
+
+**Key Technologies:**
+- **Model Predictive Control (MPC):** 100ms preview horizon
+- **Whole-Body Control:** 30+ DOF coordinated simultaneously
+- **Proprioceptive State Estimation:** IMU + joint encoders (no cameras needed for balance)
+- **Hydraulic Actuators:** 450W/kg power density
+
+**Parkour Strategy:**
+1. Visual perception → foothold detection
+2. Trajectory optimization → jump trajectory
+3. WBC → execute while airborne
+4. Impact absorption → compliant landing
+
+### Tesla Optimus
+
+**Simplified Control:**
+- **Quasi-Static Walking:** Slow, deliberate steps (0.5 m/s)
+- **Vision-Based Terrain Mapping:** RealSense depth cameras
+- **Learning-Based Grasping:** Imitation learning for manipulation
+- **Torque-Controlled Joints:** Harmonic drives for backdrivability
+
+---
+
+## Summary
+
+In this chapter, we mastered bipedal locomotion and balance:
+
+✅ **Balance Theory:** Center of Mass (CoM), Zero Moment Point (ZMP), support polygon
+✅ **Gait Generation:** Linear Inverted Pendulum Model (LIPM), preview control
+✅ **Stability:** Capture point, ZMP margin, angular momentum
+✅ **Fall Recovery:** Ankle, hip, and step strategies
+✅ **Terrain Adaptation:** Force sensing, slope detection, adaptive gait
+✅ **Whole-Body Control:** QP-based optimization with contact constraints
+
+**Next Steps:**
+- **Chapter 13:** Vision-Language-Action models for cognitive robotics and natural language control
+
+**Key Takeaway:** Bipedal balance is fundamentally about predicting and controlling the Zero Moment Point (ZMP). Modern humanoids combine model-based control (ZMP, LIPM) with learning-based policies (reinforcement learning) to achieve robust, dynamic locomotion in real-world environments.
+
+---
+
+<ChatRAG
+  placeholder="Ask me about ZMP, gait generation, balance control, or humanoid walking..."
+  useRealAPI={false}
+  messageLimit={10}
+  resetLimitDaily={true}
+/>

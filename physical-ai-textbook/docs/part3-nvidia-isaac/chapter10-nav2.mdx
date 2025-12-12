@@ -1,0 +1,967 @@
+---
+id: chapter10-nav2
+title: "Chapter 10: Navigation with Nav2"
+sidebar_position: 10
+description: "Master Nav2 navigation stack for autonomous robot navigation, path planning, obstacle avoidance, and behavior trees for humanoid and mobile robots"
+keywords: [Nav2, navigation, path planning, SLAM, costmaps, behavior trees, DWB, obstacle avoidance, localization]
+---
+
+import RobotStatus from '@site/src/components/RobotStatus';
+import ChatRAG from '@site/src/components/ChatRAG';
+
+# Chapter 10: Navigation with Nav2
+
+<RobotStatus status="online" label="Nav2 Navigation Active" />
+
+## Introduction
+
+**Nav2** (Navigation 2) is the successor to the ROS Navigation Stack, completely rewritten for ROS 2 to provide a robust, production-ready autonomous navigation system for mobile robots. It combines localization, global planning, local planning, and recovery behaviors into a unified framework powered by **Behavior Trees**.
+
+**Why Nav2 for Physical AI?**
+- **Production-Ready:** Battle-tested in warehouses, hospitals, and retail environments
+- **Behavior Trees:** Flexible, maintainable navigation logic
+- **Plugin-Based:** Swap planners, controllers, and behaviors without code changes
+- **Hardware Agnostic:** Works with differential drive, omnidirectional, and bipedal robots
+- **Real-Time Performance:** Sub-100ms planning cycles for dynamic environments
+
+**Key Capabilities:**
+- Autonomous waypoint navigation
+- Dynamic obstacle avoidance
+- Multi-robot coordination (via nav2_multirobots)
+- Recovery behaviors (rotate, backup, wait)
+- Keepout and speed-restricted zones
+
+---
+
+## Architecture Overview
+
+### Nav2 System Components
+
+```
+┌────────────────────────────────────────────────────────┐
+│              Nav2 Navigation Stack                     │
+├────────────────────────────────────────────────────────┤
+│  High-Level Planning                                   │
+│  ├─ Behavior Tree Navigator (bt_navigator)            │
+│  ├─ Waypoint Follower (follow_path)                   │
+│  └─ Navigation Goals (goal pose, waypoints)           │
+├────────────────────────────────────────────────────────┤
+│  Planning & Control                                    │
+│  ├─ Global Planner (NavFn, Smac, Theta*)              │
+│  ├─ Controller (DWB, TEB, MPPI)                       │
+│  └─ Smoother (simple_smoother)                        │
+├────────────────────────────────────────────────────────┤
+│  Perception & Mapping                                  │
+│  ├─ Costmap 2D (global & local)                       │
+│  │   ├─ Static Layer (map)                            │
+│  │   ├─ Obstacle Layer (laser scan)                   │
+│  │   └─ Inflation Layer (safety buffer)               │
+│  ├─ Lifecycle Manager                                  │
+│  └─ Map Server (map_io, map_saver)                    │
+├────────────────────────────────────────────────────────┤
+│  Localization                                          │
+│  ├─ AMCL (Adaptive Monte Carlo Localization)          │
+│  ├─ Particle Filter                                    │
+│  └─ Sensor Fusion (laser, odometry)                   │
+├────────────────────────────────────────────────────────┤
+│  Recovery Behaviors                                    │
+│  ├─ Spin (rotate in place)                            │
+│  ├─ BackUp (reverse motion)                           │
+│  ├─ Wait (pause and retry)                            │
+│  └─ ClearCostmapExceptRegion                          │
+└────────────────────────────────────────────────────────┘
+```
+
+**Navigation Pipeline:**
+1. **Map:** Load pre-built map (SLAM or hand-drawn)
+2. **Localize:** AMCL estimates robot's pose on map
+3. **Plan Global Path:** A* or other algorithm finds waypoints
+4. **Follow Path:** Controller tracks path while avoiding obstacles
+5. **Recover:** If stuck, execute recovery behaviors
+6. **Goal Reached:** Stop and wait for next command
+
+---
+
+## Installation
+
+### Nav2 on Ubuntu 22.04 (ROS 2 Humble)
+
+```bash
+# Install Nav2 packages
+sudo apt install ros-humble-navigation2 \
+                 ros-humble-nav2-bringup \
+                 ros-humble-turtlebot3-gazebo
+
+# Install SLAM Toolbox (for mapping)
+sudo apt install ros-humble-slam-toolbox
+
+# Source workspace
+source /opt/ros/humble/setup.bash
+```
+
+### Verify Installation
+
+```bash
+# Check Nav2 version
+ros2 pkg list | grep navigation2
+
+# Expected output:
+# navigation2
+# nav2_amcl
+# nav2_behavior_tree
+# nav2_bt_navigator
+# nav2_controller
+# nav2_costmap_2d
+# nav2_lifecycle_manager
+# nav2_map_server
+# nav2_planner
+# ... (25+ packages)
+```
+
+---
+
+## Costmaps: Understanding the World
+
+### Costmap Layers
+
+Nav2 uses **layered costmaps** to represent the environment:
+
+```python
+# Costmap value meanings (0-255)
+FREE_SPACE = 0          # Safe to traverse
+INFLATED = 1-252        # Near obstacles, discouraged
+LETHAL_OBSTACLE = 254   # Collision imminent
+UNKNOWN = 255           # Not yet scanned
+```
+
+### Costmap Configuration
+
+**File:** `config/costmap_common_params.yaml`
+
+```yaml
+global_costmap:
+  global_frame: map
+  robot_base_frame: base_link
+  update_frequency: 1.0  # Hz
+  publish_frequency: 1.0
+
+  plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+
+  static_layer:
+    plugin: "nav2_costmap_2d::StaticLayer"
+    map_subscribe_transient_local: True
+
+  obstacle_layer:
+    plugin: "nav2_costmap_2d::ObstacleLayer"
+    observation_sources: scan
+    scan:
+      topic: /scan
+      max_obstacle_height: 2.0
+      clearing: True
+      marking: True
+      data_type: "LaserScan"
+      raytrace_max_range: 3.0
+      raytrace_min_range: 0.0
+      obstacle_max_range: 2.5
+      obstacle_min_range: 0.0
+
+  inflation_layer:
+    plugin: "nav2_costmap_2d::InflationLayer"
+    cost_scaling_factor: 3.0  # Exponential decay
+    inflation_radius: 0.55     # meters (robot radius + safety)
+
+local_costmap:
+  local_frame: odom
+  rolling_window: True       # Moves with robot
+  width: 4                   # meters
+  height: 4
+  resolution: 0.05           # 5cm per cell
+  update_frequency: 5.0      # Higher for dynamic obstacles
+  publish_frequency: 2.0
+  plugins: ["obstacle_layer", "inflation_layer"]
+```
+
+### Example: Visualize Costmap
+
+```bash
+# Terminal 1: Launch Gazebo simulation
+export TURTLEBOT3_MODEL=waffle
+ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+
+# Terminal 2: Launch Nav2
+ros2 launch nav2_bringup bringup_launch.py \
+  use_sim_time:=True \
+  map:=/path/to/my_map.yaml
+
+# Terminal 3: Open RViz
+ros2 run rviz2 rviz2 -d $(ros2 pkg prefix nav2_bringup)/share/nav2_bringup/rviz/nav2_default_view.rviz
+
+# In RViz, add displays:
+# - /global_costmap/costmap → Shows planned path layer
+# - /local_costmap/costmap → Shows dynamic obstacles
+```
+
+---
+
+## Path Planning: Getting from A to B
+
+### Global Planners
+
+**1. NavFn Planner (Dijkstra's Algorithm)**
+
+```yaml
+# config/planner_server.yaml
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    planner_plugins: ["GridBased"]
+
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5           # Goal tolerance (meters)
+      use_astar: False         # Dijkstra (False) or A* (True)
+      allow_unknown: True      # Navigate through unknown space
+```
+
+**When to use:**
+- Simple environments
+- Guaranteed shortest path
+- Fast computation
+
+**2. Smac Planner 2D (Hybrid A*)**
+
+```yaml
+SmacPlanner2D:
+  plugin: "nav2_smac_planner/SmacPlanner2D"
+  tolerance: 0.25
+  downsample_costmap: False
+  downsampling_factor: 1
+  allow_unknown: False        # Safer for production
+  max_planning_time: 5.0      # seconds
+  motion_model_for_search: "DUBIN"  # or "REEDS_SHEPP" for humanoids
+  angle_quantization_bins: 72       # 5-degree increments
+```
+
+**When to use:**
+- Non-holonomic robots (cars, humanoids)
+- Environments requiring smooth turns
+- Need to respect turning radius
+
+**3. Theta* Planner (Any-Angle)**
+
+```yaml
+ThetaStar:
+  plugin: "nav2_theta_star_planner/ThetaStarPlanner"
+  how_many_corners: 8         # Consider 8 directions
+  w_euc_cost: 1.0             # Euclidean weight
+  w_traversal_cost: 2.0       # Obstacle penalty
+```
+
+**When to use:**
+- Large open spaces
+- Humanoid robots that can move diagonally
+- Prefer straight lines over grid-aligned paths
+
+---
+
+## Local Controllers: Following the Path
+
+### DWB Controller (Dynamic Window Approach)
+
+The **DWB** (Dynamic Window B) controller is the default in Nav2. It samples velocity commands and scores them based on:
+- **Path alignment:** How well does this velocity follow the global path?
+- **Obstacle proximity:** How close to obstacles?
+- **Goal distance:** How much progress toward goal?
+
+**Configuration:**
+
+```yaml
+# config/controller.yaml
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+
+    progress_checker_plugins: ["progress_checker"]
+    goal_checker_plugins: ["goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.5    # Meters moved to consider progress
+      movement_time_allowance: 10.0    # Seconds before "stuck" declared
+
+    goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25          # Meters
+      yaw_goal_tolerance: 0.25         # Radians (~14 degrees)
+
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: True
+      min_vel_x: -0.3                  # m/s (negative for backward)
+      max_vel_x: 0.5                   # m/s forward speed
+      min_vel_y: 0.0                   # Differential drive
+      max_vel_y: 0.0
+      max_vel_theta: 1.0               # rad/s rotation speed
+      min_speed_xy: -0.3               # Allow reversing
+      max_speed_xy: 0.5
+      acc_lim_x: 2.5                   # m/s² acceleration limit
+      acc_lim_y: 0.0
+      acc_lim_theta: 3.2               # rad/s² angular acceleration
+      decel_lim_x: -2.5
+      decel_lim_y: 0.0
+      decel_lim_theta: -3.2
+
+      # DWB Trajectory Scoring
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+
+      BaseObstacle.scale: 0.02         # Penalty for proximity to obstacles
+      PathAlign.scale: 32.0            # Reward for aligning with global path
+      GoalAlign.scale: 24.0            # Reward for facing goal
+      PathDist.scale: 32.0             # Reward for staying on path
+      GoalDist.scale: 24.0             # Reward for approaching goal
+      RotateToGoal.scale: 32.0         # Rotate to goal when close
+```
+
+### Example: Test Controller in Simulation
+
+```python
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseStamped
+from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+
+class Nav2Tester(Node):
+    def __init__(self):
+        super().__init__('nav2_tester')
+        self.navigator = BasicNavigator()
+
+        # Wait for Nav2 to be ready
+        self.navigator.waitUntilNav2Active()
+        self.get_logger().info('Nav2 is ready!')
+
+        # Define goal pose
+        goal_pose = PoseStamped()
+        goal_pose.header.frame_id = 'map'
+        goal_pose.header.stamp = self.navigator.get_clock().now().to_msg()
+        goal_pose.pose.position.x = 3.5
+        goal_pose.pose.position.y = 1.0
+        goal_pose.pose.position.z = 0.0
+        goal_pose.pose.orientation.w = 1.0  # No rotation
+
+        # Send goal
+        self.navigator.goToPose(goal_pose)
+
+        # Monitor progress
+        i = 0
+        while not self.navigator.isTaskComplete():
+            i += 1
+            feedback = self.navigator.getFeedback()
+            if feedback and i % 5 == 0:
+                self.get_logger().info(
+                    f'Distance remaining: {feedback.distance_remaining:.2f}m')
+
+        # Check result
+        result = self.navigator.getResult()
+        if result == TaskResult.SUCCEEDED:
+            self.get_logger().info('Goal succeeded!')
+        elif result == TaskResult.CANCELED:
+            self.get_logger().info('Goal was canceled!')
+        elif result == TaskResult.FAILED:
+            self.get_logger().info('Goal failed!')
+
+        self.navigator.lifecycleShutdown()
+
+def main(args=None):
+    rclpy.init(args=args)
+    tester = Nav2Tester()
+    rclpy.spin(tester)
+    tester.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+**Run the test:**
+
+```bash
+# Make executable
+chmod +x nav2_tester.py
+
+# Run (make sure Nav2 is already launched)
+python3 nav2_tester.py
+```
+
+---
+
+## Behavior Trees: Intelligent Navigation Logic
+
+### What are Behavior Trees?
+
+Behavior Trees (BT) provide a hierarchical, reactive way to define robot behavior. Unlike Finite State Machines (FSM), BTs are:
+- **Composable:** Combine simple behaviors into complex ones
+- **Reusable:** Same subtree used in multiple contexts
+- **Debuggable:** Visualize execution flow in real-time
+
+### Nav2 Default Behavior Tree
+
+```xml
+<!-- config/navigate_to_pose_w_replanning.xml -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+
+      <!-- Main navigation pipeline -->
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+
+      <!-- If navigation fails, try recovery behaviors -->
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+
+        <!-- First, try spinning -->
+        <Sequence name="SpinRecovery">
+          <Spin spin_dist="1.57"/>  <!-- 90 degrees -->
+          <Wait wait_duration="5"/>
+        </Sequence>
+
+        <!-- Then, try backing up -->
+        <Sequence name="BackUpRecovery">
+          <BackUp backup_dist="0.3" backup_speed="0.1"/>
+          <Wait wait_duration="5"/>
+        </Sequence>
+
+        <!-- Last resort: clear costmaps and wait -->
+        <Sequence name="WaitRecovery">
+          <ClearEntireCostmap name="ClearGlobalCostmap-Recovery" service_name="global_costmap/clear_entirely_global_costmap"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Recovery" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <Wait wait_duration="10"/>
+        </Sequence>
+      </ReactiveFallback>
+
+    </RecoveryNode>
+  </BehaviorTree>
+</root>
+```
+
+**How it works:**
+1. **PipelineSequence:** Replan path every second while following
+2. **RecoveryNode:** If child fails, try recovery (clear costmap, retry)
+3. **ReactiveFallback:** If all else fails, execute spin → backup → wait
+4. **GoalUpdated:** If new goal arrives mid-navigation, abort and restart
+
+### Custom Behavior Tree: Multi-Waypoint Patrol
+
+```xml
+<!-- config/patrol_waypoints.xml -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Repeat num_cycles="-1">  <!-- Infinite loop -->
+      <Sequence name="PatrolSequence">
+
+        <!-- Waypoint 1: Entrance -->
+        <ComputePathToPose goal="{waypoint1}" path="{path}" planner_id="GridBased"/>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <Wait wait_duration="5.0"/>  <!-- Pause at waypoint -->
+
+        <!-- Waypoint 2: Hallway -->
+        <ComputePathToPose goal="{waypoint2}" path="{path}" planner_id="GridBased"/>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <Wait wait_duration="5.0"/>
+
+        <!-- Waypoint 3: Exit -->
+        <ComputePathToPose goal="{waypoint3}" path="{path}" planner_id="GridBased"/>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+        <Wait wait_duration="5.0"/>
+
+      </Sequence>
+    </Repeat>
+  </BehaviorTree>
+</root>
+```
+
+**Launch with custom BT:**
+
+```yaml
+# config/nav2_params.yaml
+bt_navigator:
+  ros__parameters:
+    default_nav_to_pose_bt_xml: "/path/to/patrol_waypoints.xml"
+```
+
+---
+
+## Localization with AMCL
+
+### Adaptive Monte Carlo Localization
+
+**AMCL** uses a particle filter to estimate the robot's pose on a known map. Each particle represents a possible robot pose, and sensor observations update particle weights.
+
+**Configuration:**
+
+```yaml
+# config/amcl.yaml
+amcl:
+  ros__parameters:
+    use_sim_time: True
+    alpha1: 0.2          # Rotation noise (rotational motion)
+    alpha2: 0.2          # Rotation noise (translational motion)
+    alpha3: 0.2          # Translation noise (translational motion)
+    alpha4: 0.2          # Translation noise (rotational motion)
+    alpha5: 0.2          # Translation noise (uniform)
+
+    base_frame_id: "base_footprint"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+
+    do_beamskip: False
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 100.0
+    laser_min_range: -1.0
+    laser_model_type: "likelihood_field"
+
+    max_beams: 60        # Downsample laser scan for performance
+    max_particles: 2000  # Max particles in filter
+    min_particles: 500   # Min particles in filter
+
+    odom_frame_id: "odom"
+    pf_err: 0.05         # Particle filter error
+    pf_z: 0.99           # Particle filter z-score
+
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5  # Hz
+
+    sigma_hit: 0.2
+    tf_broadcast: True
+    transform_tolerance: 1.0
+
+    update_min_a: 0.2    # Rotation threshold for update (radians)
+    update_min_d: 0.25   # Translation threshold for update (meters)
+
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+
+    # Initial pose (set via RViz "2D Pose Estimate")
+    set_initial_pose: False
+    initial_pose:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      yaw: 0.0
+```
+
+### Example: Set Initial Pose Programmatically
+
+```python
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import PoseWithCovarianceStamped
+
+class InitialPoseSetter(Node):
+    def __init__(self):
+        super().__init__('initial_pose_setter')
+        self.publisher = self.create_publisher(
+            PoseWithCovarianceStamped,
+            '/initialpose',
+            10
+        )
+
+        # Wait for AMCL to be ready
+        self.timer = self.create_timer(1.0, self.publish_initial_pose)
+        self.published = False
+
+    def publish_initial_pose(self):
+        if self.published:
+            self.timer.cancel()
+            return
+
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = 'map'
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        # Set known starting position
+        msg.pose.pose.position.x = 0.0
+        msg.pose.pose.position.y = 0.0
+        msg.pose.pose.position.z = 0.0
+        msg.pose.pose.orientation.w = 1.0
+
+        # Set covariance (uncertainty)
+        msg.pose.covariance = [
+            0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467
+        ]
+
+        self.publisher.publish(msg)
+        self.get_logger().info('Initial pose published!')
+        self.published = True
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = InitialPoseSetter()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+---
+
+## Humanoid-Specific Navigation
+
+### Bipedal Locomotion Challenges
+
+Humanoid robots face unique navigation challenges:
+1. **Non-holonomic constraints:** Cannot move sideways easily
+2. **Balance stability:** Must plan footsteps, not just paths
+3. **Variable height:** Upper body sway affects sensor placement
+4. **Slower speeds:** 0.5-2 m/s vs 2-5 m/s for wheeled robots
+
+### Adaptations for Humanoids
+
+**1. Use Smac Planner with Reeds-Shepp Motion Model:**
+
+```yaml
+SmacPlanner2D:
+  plugin: "nav2_smac_planner/SmacPlanner2D"
+  motion_model_for_search: "REEDS_SHEPP"  # Allows forward/backward arcs
+  minimum_turning_radius: 0.8              # Humanoid turn radius
+  reverse_penalty: 2.0                     # Discourage backward walking
+  change_penalty: 0.1                      # Penalty for direction changes
+  non_straight_penalty: 1.2                # Prefer straight paths
+  cost_penalty: 2.0                        # Avoid obstacles more aggressively
+```
+
+**2. Slower Controller Speeds:**
+
+```yaml
+FollowPath:
+  max_vel_x: 0.8       # Slower forward speed
+  max_vel_theta: 0.5   # Slower rotation
+  acc_lim_x: 0.5       # Gentler acceleration
+  acc_lim_theta: 1.0
+```
+
+**3. Larger Inflation Radius:**
+
+```yaml
+inflation_layer:
+  inflation_radius: 0.8  # Wider safety margin
+  cost_scaling_factor: 5.0  # Stronger penalty near obstacles
+```
+
+**4. Footstep Planner Integration (Advanced):**
+
+For true bipedal navigation, integrate a footstep planner like **humanoid_nav** or **vigir_footstep_planning** to generate feasible foot placements that respect balance constraints.
+
+---
+
+## Keepout Zones & Speed Limits
+
+### Keepout Zones (No-Go Areas)
+
+```yaml
+# config/keepout_filter.yaml
+global_costmap:
+  plugins: ["static_layer", "obstacle_layer", "inflation_layer", "keepout_filter"]
+
+  keepout_filter:
+    plugin: "nav2_costmap_2d::KeepoutFilter"
+    enabled: True
+    filter_info_topic: "/costmap_filter_info"
+    transform_tolerance: 0.1
+```
+
+**Create keepout mask:**
+
+```bash
+# Use GIMP or other tool to create a PNG mask
+# White (255) = free space
+# Black (0) = keepout zone
+
+# Convert to occupancy grid
+ros2 run nav2_map_server map_saver_cli -f keepout_map --ros-args -p save_map_timeout:=10000
+```
+
+**Publish filter info:**
+
+```python
+from nav2_msgs.msg import CostmapFilterInfo
+
+info_msg = CostmapFilterInfo()
+info_msg.type = 0  # KEEPOUT_FILTER
+info_msg.filter_mask_topic = "/keepout_mask"
+info_msg.base = 0.0
+info_msg.multiplier = 1.0
+# Publish on /costmap_filter_info
+```
+
+### Speed-Restricted Zones
+
+```yaml
+global_costmap:
+  plugins: ["static_layer", "obstacle_layer", "speed_filter"]
+
+  speed_filter:
+    plugin: "nav2_costmap_2d::SpeedFilter"
+    enabled: True
+    filter_info_topic: "/speed_limit_info"
+    speed_limit_topic: "/speed_limit"
+```
+
+**Example: School Zone (Slower Speed)**
+
+```python
+from geometry_msgs.msg import PolygonStamped, Point32
+from nav2_msgs.msg import SpeedLimit
+
+# Define polygon for slow zone
+polygon = PolygonStamped()
+polygon.header.frame_id = "map"
+polygon.polygon.points = [
+    Point32(x=5.0, y=5.0),
+    Point32(x=10.0, y=5.0),
+    Point32(x=10.0, y=10.0),
+    Point32(x=5.0, y=10.0),
+]
+
+# Set speed limit in that zone
+speed_limit = SpeedLimit()
+speed_limit.speed_limit = 0.3  # m/s (slow walk)
+speed_limit.percentage = True
+# Publish on /speed_limit
+```
+
+---
+
+## Performance Tuning
+
+### Optimization Checklist
+
+**1. Costmap Update Frequencies:**
+- **Global costmap:** 1-2 Hz (slow, doesn't change often)
+- **Local costmap:** 5-10 Hz (fast, for dynamic obstacles)
+
+**2. Planner Frequency:**
+- **Global planner:** 1 Hz (replan every second)
+- **Controller:** 20 Hz (smooth path following)
+
+**3. Particle Filter:**
+- **Particles:** 500-2000 (fewer = faster, less accurate)
+- **Max beams:** 30-60 (downsample laser scan)
+
+**4. Trajectory Sampling (DWB):**
+```yaml
+vx_samples: 20       # Reduce from default 20 to 15 for speed
+vy_samples: 5
+vtheta_samples: 20   # Reduce from 40 to 20
+```
+
+**5. Use GPU-Accelerated Planning:**
+
+For large maps or high-frequency replanning, use **nvblox** (NVIDIA's GPU voxel mapper) instead of 2D costmaps.
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**1. "AMCL not publishing transform"**
+
+```bash
+# Check if /scan topic is publishing
+ros2 topic echo /scan
+
+# Check AMCL is receiving scans
+ros2 node info /amcl
+
+# Set initial pose manually in RViz (2D Pose Estimate button)
+```
+
+**2. "Planner fails to find path"**
+
+```bash
+# Verify costmap is correct
+ros2 topic echo /global_costmap/costmap
+
+# Check if goal is in free space (not in obstacle)
+# Increase planner timeout
+planner_server:
+  ros__parameters:
+    max_planning_time: 10.0  # Increase from 5.0
+```
+
+**3. "Robot oscillates or gets stuck"**
+
+```bash
+# Reduce controller frequency
+controller_frequency: 10.0  # Down from 20.0
+
+# Increase path/goal distance thresholds
+PathDist.scale: 48.0  # Up from 32.0
+GoalDist.scale: 32.0  # Up from 24.0
+
+# Widen inflation radius to avoid tight spaces
+inflation_radius: 0.7  # Up from 0.55
+```
+
+**4. "Navigation slow on large maps"**
+
+```bash
+# Downsample map resolution
+resolution: 0.1  # Up from 0.05 (10cm vs 5cm cells)
+
+# Use NavFn instead of Smac (faster, less accurate)
+planner_plugins: ["GridBased"]
+GridBased:
+  plugin: "nav2_navfn_planner/NavfnPlanner"
+```
+
+---
+
+## Best Practices
+
+### Production Deployment
+
+1. **Test in Simulation First:**
+   - Use Gazebo or Isaac Sim to validate behavior
+   - Test recovery behaviors (block robot, see if it recovers)
+   - Measure success rate (95%+ for production)
+
+2. **Tune for Your Robot:**
+   - Measure actual max speeds and accelerations
+   - Test turning radius (for Smac planner)
+   - Calibrate odometry (use `robot_calibration` package)
+
+3. **Monitor Performance:**
+   ```bash
+   # Check planning success rate
+   ros2 topic echo /plan_success
+
+   # Monitor controller errors
+   ros2 topic echo /path_error
+
+   # Log to file for analysis
+   ros2 bag record -a
+   ```
+
+4. **Graceful Degradation:**
+   - If localization fails → stop and request help
+   - If planner fails 3 times → enter "safe mode" (slower speeds)
+   - If battery low → navigate to charging station
+
+5. **Multi-Robot Coordination:**
+   - Use **nav2_multirobots** for fleet management
+   - Implement priority-based path reservation
+   - Share costmaps via DDS to avoid collisions
+
+---
+
+## Real-World Examples
+
+### Warehouse Robot Navigation
+
+```yaml
+# Optimized for fast, repetitive paths
+controller_server:
+  FollowPath:
+    max_vel_x: 1.5         # Faster in wide aisles
+    inflation_radius: 0.3  # Tighter clearance
+
+planner_server:
+  GridBased:
+    use_astar: True        # Faster than Dijkstra
+    tolerance: 0.1         # Precise goal alignment for pallet pickup
+```
+
+### Hospital Delivery Robot
+
+```yaml
+# Prioritize safety and smooth motion
+controller_server:
+  FollowPath:
+    max_vel_x: 0.5         # Slow around patients
+    BaseObstacle.scale: 0.05  # Strong obstacle avoidance
+
+speed_filter:
+  enabled: True            # Slow zones near patient rooms
+```
+
+### Humanoid Home Assistant
+
+```yaml
+# Balance stability and navigation
+planner_server:
+  SmacPlanner2D:
+    motion_model_for_search: "REEDS_SHEPP"
+    minimum_turning_radius: 0.6
+
+controller_server:
+  FollowPath:
+    max_vel_x: 0.6         # Walking speed
+    max_vel_theta: 0.4     # Slow turns for balance
+    acc_lim_x: 0.3         # Gentle acceleration
+```
+
+---
+
+## Summary
+
+In this chapter, we mastered **Nav2**, the production-ready navigation stack for ROS 2:
+
+✅ **Architecture:** Costmaps, planners, controllers, and behavior trees
+✅ **Localization:** AMCL particle filter for pose estimation
+✅ **Path Planning:** NavFn, Smac, and Theta* global planners
+✅ **Path Following:** DWB controller with dynamic obstacle avoidance
+✅ **Behavior Trees:** Composable, reactive navigation logic
+✅ **Humanoid Adaptations:** Reeds-Shepp motion model and footstep planning
+✅ **Safety Features:** Keepout zones, speed limits, recovery behaviors
+✅ **Performance:** Tuning for real-time, production environments
+
+**Next Steps:**
+- **Chapter 11:** Humanoid kinematics and dynamics for bipedal robots
+- **Chapter 12:** Bipedal locomotion, balance, and gait generation
+- **Chapter 13:** Vision-Language-Action models for cognitive robotics
+
+**Key Takeaway:** Nav2 provides enterprise-grade autonomous navigation, but requires careful tuning for your robot's kinematics, sensor suite, and operating environment. Always test in simulation before deploying to real hardware.
+
+---
+
+<ChatRAG
+  placeholder="Ask me about Nav2, path planning, costmaps, or behavior trees..."
+  useRealAPI={false}
+  messageLimit={10}
+  resetLimitDaily={true}
+/>
