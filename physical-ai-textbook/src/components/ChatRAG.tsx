@@ -111,32 +111,6 @@ export default function ChatRAG({
   const STORAGE_KEY = 'chatrag_usage';
   const STORAGE_DATE_KEY = 'chatrag_usage_date';
 
-  // Add custom scrollbar styles
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      .custom-scrollbar::-webkit-scrollbar {
-        width: 8px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(148, 163, 184, 0.08);
-        border-radius: 4px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.3) 0%, rgba(71, 85, 105, 0.3) 100%);
-        border-radius: 4px;
-        transition: all 0.2s;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(71, 85, 105, 0.5) 100%);
-      }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
   const getInitialMessageCount = (): number => {
     if (!resetLimitDaily || typeof window === 'undefined') return 0;
     const today = new Date().toDateString();
@@ -156,7 +130,7 @@ export default function ChatRAG({
   const [apiStatus, setApiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [messageCount, setMessageCount] = useState<number>(getInitialMessageCount());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -256,270 +230,147 @@ export default function ChatRAG({
 
   return (
     <div className="tw-flex tw-flex-col" style={{
-      height: '600px',
+      height: '440px',
       maxHeight: '80vh',
-      fontFamily: 'system-ui, -apple-system, "Inter", sans-serif',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
       borderRadius: '16px',
       overflow: 'hidden',
-      background: 'linear-gradient(to bottom, #ffffff, #f8fafc)',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-      border: '1px solid rgba(148, 163, 184, 0.2)'
+      background: 'var(--ifm-background-color, #ffffff)',
+      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05)',
+      border: '1px solid var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))'
     }}>
-      {/* Header - Beautiful Gradient Bar */}
+      {/* Simple Clean Header */}
       <div style={{
-        background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-        padding: '16px 24px',
-        borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        padding: '12px 16px',
+        borderBottom: '1px solid var(--ifm-color-emphasis-200, rgba(0, 0, 0, 0.1))',
+        background: 'var(--ifm-background-color, #ffffff)'
       }}>
-        <div className="tw-flex tw-items-center tw-gap-3">
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '22px',
-            border: '1px solid rgba(255, 255, 255, 0.1)'
-          }}>
-            🤖
-          </div>
-          <div>
-            <h3 style={{
-              margin: 0,
-              fontSize: '16px',
+        <div className="tw-flex tw-items-center tw-justify-between">
+          <div style={{ fontSize: '14px' }}>
+            <div style={{
               fontWeight: 600,
-              color: '#f1f5f9',
-              fontFamily: 'system-ui, -apple-system, sans-serif'
+              color: 'var(--ifm-font-color-base, #1e293b)',
+              marginBottom: '2px'
             }}>
-              AI Assistant
-            </h3>
-            <p style={{
-              margin: 0,
+              Ask about Physical AI
+            </div>
+            <div style={{
               fontSize: '12px',
-              color: 'rgba(241, 245, 249, 0.7)',
-              fontFamily: 'system-ui, -apple-system, sans-serif'
+              color: 'var(--ifm-color-emphasis-600, #64748b)'
             }}>
-              {apiStatus === 'available' ? '● Online - Powered by RAG' : '● Simulated Mode'}
-            </p>
+              Powered by RAG + GPT-4o
+            </div>
           </div>
+          <span style={{
+            fontSize: '11px',
+            color: apiStatus === 'available' ? '#10b981' : '#6b7280'
+          }}>
+            {apiStatus === 'available' ? 'Online' : (isLoading ? 'Thinking…' : 'Offline')}
+          </span>
         </div>
       </div>
 
       {/* Chat Container */}
       <div className="tw-flex tw-flex-col tw-overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
-        {/* Messages Area - FIXED: Now properly scrollable with custom scrollbar */}
+        {/* Messages Area - Scrollable */}
         <div
-          className="tw-overflow-y-auto tw-px-6 tw-py-6 custom-scrollbar"
+          className="tw-overflow-y-auto"
           style={{
             flex: 1,
             minHeight: 0,
+            padding: '12px',
             overflowY: 'auto',
             scrollBehavior: 'smooth'
           }}
         >
           {messages.length === 0 ? (
-            <div className="tw-h-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-text-center tw-px-4">
+            <div className="tw-h-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-text-center tw-px-6">
               <div style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '20px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '24px',
-                fontSize: '40px',
-                boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(139, 92, 246, 0.2)'
+                fontSize: '36px',
+                marginBottom: '16px'
               }}>
-                🤖
+                👋
               </div>
               <h4 style={{
-                fontSize: '22px',
-                fontWeight: 700,
-                background: 'linear-gradient(135deg, #1e293b 0%, #475569 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                marginBottom: '12px',
+                fontSize: '16px',
+                fontWeight: 600,
+                color: 'var(--ifm-font-color-base, #1e293b)',
+                marginBottom: '8px',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
               }}>
-                How can I help you learn today?
+                Hi! I'm your Physical AI assistant
               </h4>
               <p style={{
-                fontSize: '15px',
-                color: '#64748b',
-                maxWidth: '380px',
-                lineHeight: '1.6',
-                marginBottom: '24px',
+                fontSize: '14px',
+                color: 'var(--ifm-color-emphasis-600, #64748b)',
+                maxWidth: '280px',
+                lineHeight: '1.5',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
               }}>
-                Ask me anything about Physical AI, ROS 2, sensors, simulation, or robotics concepts.
+                Ask me anything about robotics, ROS 2, sensors, simulation, or physical AI concepts.
               </p>
-              <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '8px',
-                justifyContent: 'center',
-                maxWidth: '420px'
-              }}>
-                {['What is ROS 2?', 'How does LiDAR work?', 'Explain URDF format', 'Show me a node example'].map((suggestion, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setInput(suggestion)}
-                    style={{
-                      background: 'white',
-                      border: '1px solid rgba(148, 163, 184, 0.2)',
-                      borderRadius: '12px',
-                      padding: '8px 14px',
-                      fontSize: '13px',
-                      color: '#475569',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      fontFamily: 'system-ui, -apple-system, sans-serif',
-                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.borderColor = '#1e293b';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'white';
-                      e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)';
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
-                    }}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
             </div>
           ) : (
-            <div className="tw-space-y-6">
+            <div className="tw-space-y-3">
               {messages.map((message, index) => (
                 <div
                   key={index}
-                  className={`tw-flex tw-gap-4 ${
+                  className={`tw-flex ${
                     message.role === 'user' ? 'tw-justify-end' : 'tw-justify-start'
                   }`}
                 >
-                  {message.role === 'assistant' && (
-                    <div style={{
-                      flexShrink: 0,
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '10px',
-                      background: 'rgba(100, 116, 139, 0.12)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '18px',
-                      marginTop: '2px'
-                    }}>
-                      🤖
-                    </div>
-                  )}
-
-                  <div className="tw-flex-1" style={{ maxWidth: message.role === 'user' ? '80%' : '100%' }}>
-                    {message.role === 'user' ? (
-                      /* User message - Dark pill */
-                      <div style={{
-                        marginLeft: 'auto',
-                        maxWidth: '100%',
-                        display: 'inline-block',
-                      }}>
-                        <div style={{
-                          background: '#1e293b',
-                          color: '#f1f5f9',
-                          padding: '12px 18px',
-                          borderRadius: '20px',
-                          fontSize: '14.5px',
-                          lineHeight: '1.5',
-                          fontFamily: 'system-ui, -apple-system, sans-serif',
-                          wordBreak: 'break-word',
-                        }}>
-                          {message.content}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Bot message - No bubble, direct text */
-                      <div>
-                        <div style={{
-                          color: '#1e293b',
-                          fontSize: '14.5px',
-                          lineHeight: '1.7',
-                          fontFamily: 'system-ui, -apple-system, sans-serif',
-                        }}>
-                          <MessageContent content={message.content} />
-                        </div>
-
+                  <div
+                    style={{
+                      maxWidth: '85%',
+                      background: message.role === 'user'
+                        ? 'var(--ifm-color-primary, #2563eb)'
+                        : 'var(--ifm-background-surface-color, #f1f5f9)',
+                      color: message.role === 'user'
+                        ? '#ffffff'
+                        : 'var(--ifm-font-color-base, #1e293b)',
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontSize: '14px',
+                      lineHeight: '1.5',
+                      fontFamily: 'system-ui, -apple-system, sans-serif',
+                      wordBreak: 'break-word',
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  >
+                    {message.role === 'assistant' ? (
+                      <>
+                        <MessageContent content={message.content} />
                         {message.sources && message.sources.length > 0 && (
                           <div style={{
-                            marginTop: '12px',
-                            paddingTop: '12px',
-                            borderTop: '1px solid rgba(148, 163, 184, 0.2)'
+                            marginTop: '8px',
+                            paddingTop: '8px',
+                            borderTop: '1px solid var(--ifm-color-emphasis-200, rgba(0, 0, 0, 0.1))',
+                            fontSize: '12px',
+                            color: 'var(--ifm-color-emphasis-600, #64748b)'
                           }}>
-                            <p style={{
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              color: '#64748b',
-                              marginBottom: '6px',
-                              fontFamily: 'system-ui, -apple-system, sans-serif'
-                            }}>
-                              📚 Sources
-                            </p>
-                            <div className="tw-space-y-1">
-                              {message.sources.map((source, i) => (
-                                <div key={i} style={{
-                                  fontSize: '12px',
-                                  color: '#475569',
-                                  fontFamily: 'system-ui, -apple-system, sans-serif'
-                                }}>
-                                  • {source}
-                                </div>
-                              ))}
-                            </div>
+                            <strong>Sources:</strong> {message.sources.join(', ')}
                           </div>
                         )}
-                      </div>
+                      </>
+                    ) : (
+                      message.content
                     )}
                   </div>
                 </div>
               ))}
 
-              {/* Typing Indicator - Pulsing dots */}
+              {/* Typing Indicator */}
               {isLoading && (
-                <div className="tw-flex tw-gap-4">
+                <div className="tw-flex tw-justify-start">
                   <div style={{
-                    flexShrink: 0,
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '10px',
-                    background: 'rgba(100, 116, 139, 0.12)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '18px',
+                    maxWidth: '85%',
+                    background: 'var(--ifm-background-surface-color, #f1f5f9)',
+                    borderRadius: '16px',
+                    padding: '10px 14px',
+                    fontSize: '14px',
+                    color: 'var(--ifm-color-emphasis-600, #64748b)'
                   }}>
-                    🤖
-                  </div>
-                  <div style={{
-                    color: '#64748b',
-                    fontSize: '15px',
-                    paddingTop: '8px',
-                    display: 'flex',
-                    gap: '4px',
-                    fontFamily: '"Fira Code", "Consolas", monospace',
-                    letterSpacing: '2px'
-                  }}>
-                    <span className="tw-animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
-                    <span className="tw-animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
-                    <span className="tw-animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+                    <span className="tw-animate-pulse">Thinking...</span>
                   </div>
                 </div>
               )}
@@ -529,88 +380,70 @@ export default function ChatRAG({
           )}
         </div>
 
-        {/* Input Area - Prominent Bottom Section with Gradient Border */}
+        {/* Input Area - Clean and Simple */}
         <div style={{
-          borderTop: '1px solid rgba(148, 163, 184, 0.15)',
-          padding: '20px 24px 24px 24px',
+          borderTop: '1px solid var(--ifm-color-emphasis-200, rgba(0, 0, 0, 0.1))',
+          padding: '12px',
           flexShrink: 0,
-          background: 'linear-gradient(to top, #ffffff 0%, #f8fafc 100%)',
-          boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.03)'
+          background: 'var(--ifm-background-color, #ffffff)'
         }}>
-          <div className="tw-relative tw-flex tw-items-end tw-gap-3">
-            <textarea
+          <div className="tw-flex tw-items-center tw-gap-2">
+            <input
               ref={inputRef}
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder={messageLimit && messageCount >= messageLimit ? 'Daily limit reached' : placeholder}
               disabled={isLoading || (messageLimit !== undefined && messageCount >= messageLimit)}
-              rows={3}
               style={{
                 flex: 1,
-                background: 'white',
-                color: '#1e293b',
-                borderRadius: '14px',
-                padding: '18px 20px',
-                fontSize: '15px',
-                resize: 'none',
+                background: 'var(--ifm-background-color, #ffffff)',
+                color: 'var(--ifm-font-color-base, #1e293b)',
+                borderRadius: '12px',
+                padding: '8px 12px',
+                fontSize: '14px',
                 outline: 'none',
-                border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                border: '1px solid var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
-                maxHeight: '180px',
-                minHeight: '96px',
-                lineHeight: '1.6',
-                transition: 'all 0.2s',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                transition: 'all 0.2s'
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(30, 41, 59, 0.4)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+                e.currentTarget.style.borderColor = 'var(--ifm-color-primary, #2563eb)';
+                e.currentTarget.style.boxShadow = '0 0 0 2px var(--ifm-color-primary-lightest, rgba(37, 99, 235, 0.1))';
               }}
               onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.25)';
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
+                e.currentTarget.style.borderColor = 'var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             />
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim() || (messageLimit !== undefined && messageCount >= messageLimit)}
               style={{
-                flexShrink: 0,
-                background: '#1e293b',
-                color: 'white',
+                background: 'var(--ifm-color-primary, #2563eb)',
+                color: '#ffffff',
                 fontWeight: 500,
-                padding: '14px 18px',
-                borderRadius: '14px',
-                transition: 'all 0.2s',
+                padding: '8px 12px',
+                borderRadius: '12px',
+                fontSize: '14px',
                 border: 'none',
                 cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
                 opacity: isLoading || !input.trim() ? 0.5 : 1,
-                minWidth: '48px',
-                minHeight: '48px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: isLoading || !input.trim() ? '0 1px 3px rgba(0, 0, 0, 0.1)' : '0 2px 6px rgba(30, 41, 59, 0.3)',
-              }}
-              onMouseEnter={(e) => {
-                if (!isLoading && input.trim()) {
-                  e.currentTarget.style.background = '#334155';
-                  e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(30, 41, 59, 0.4)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#1e293b';
-                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                e.currentTarget.style.boxShadow = '0 2px 6px rgba(30, 41, 59, 0.3)';
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                transition: 'opacity 0.2s'
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
+              Send
             </button>
+          </div>
+          <div style={{
+            marginTop: '8px',
+            fontSize: '11px',
+            color: 'var(--ifm-color-emphasis-600, #64748b)',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}>
+            Tip: Try "What is ROS 2?" or "How does LiDAR work?"
           </div>
         </div>
       </div>
