@@ -55,21 +55,19 @@ import ChatRAG from '@site/src/components/ChatRAG';
 
 | Parameter | Symbol | Description |
 |-----------|--------|-------------|
-| Link length | aᵢ | Distance along `x_i` from `z_{i-1}` to `z_i` |
-| Link twist | αᵢ | Angle around `x_i` from `z_{i-1}` to `z_i` |
-| Link offset | dᵢ | Distance along `z_{i-1}` from `x_{i-1}` to `x_i` |
-| Joint angle | θᵢ | Angle around `z_{i-1}` from `x_{i-1}` to `x_i` |
+| Link length | $a_i$ | Distance along $x_i$ from $z_{i-1}$ to $z_i$ |
+| Link twist | $\alpha_i$ | Angle around $x_i$ from $z_{i-1}$ to $z_i$ |
+| Link offset | $d_i$ | Distance along $z_{i-1}$ from $x_{i-1}$ to $x_i$ |
+| Joint angle | $\theta_i$ | Angle around $z_{i-1}$ from $x_{i-1}$ to $x_i$ |
 
-**For revolute joint:** θᵢ is variable, dᵢ is fixed
-**For prismatic joint:** dᵢ is variable, θᵢ is fixed
+**For revolute joint:** $\theta_i$ is variable, $d_i$ is fixed
+**For prismatic joint:** $d_i$ is variable, $\theta_i$ is fixed
 
 ### Homogeneous Transformation Matrix
 
-The transformation from frame `i-1` to frame `i`:
+The transformation from frame $i-1$ to frame $i$:
 
-
-```
-
+$$
 T_i^{i-1} =
 \begin{bmatrix}
 \cos\theta_i & -\sin\theta_i \cos\alpha_i & \sin\theta_i \sin\alpha_i & a_i \cos\theta_i \\
@@ -77,25 +75,19 @@ T_i^{i-1} =
 0 & \sin\alpha_i & \cos\alpha_i & d_i \\
 0 & 0 & 0 & 1
 \end{bmatrix}
-
-```
-
+$$
 
 **Chain transformation to end-effector:**
 
-
-```
-
+$$
 T_n^0 = T_1^0 \cdot T_2^1 \cdot \ldots \cdot T_n^{n-1}
-
-```
-
+$$
 
 ---
 
 ## Forward Kinematics (FK)
 
-**Problem:** Given joint angles `\mathbf{q} = [\theta_1, \theta_2, \ldots, \theta_n]`, find end-effector pose `(x, y, z, roll, pitch, yaw)`
+**Problem:** Given joint angles $\mathbf{q} = [\theta_1, \theta_2, \ldots, \theta_n]$, find end-effector pose $(x, y, z, roll, pitch, yaw)$
 
 **Solution:** Multiply transformation matrices
 
@@ -108,28 +100,20 @@ Link 2: Length L2 = 0.8m, θ2 variable
 
 **DH Table:**
 
-| Joint | aᵢ | αᵢ | dᵢ | θᵢ |
+| Joint | $a_i$ | $\alpha_i$ | $d_i$ | $\theta_i$ |
 |-------|-------|------------|-------|------------|
-| 1     | L1    | 0          | 0     | θ₁ |
-| 2     | L2    | 0          | 0     | θ₂ |
+| 1     | L1    | 0          | 0     | $\theta_1$ |
+| 2     | L2    | 0          | 0     | $\theta_2$ |
 
 **Forward Kinematics:**
 
-
-```
-
+$$
 x = L_1 \cos\theta_1 + L_2 \cos(\theta_1 + \theta_2)
+$$
 
-```
-
-
-
-```
-
+$$
 y = L_1 \sin\theta_1 + L_2 \sin(\theta_1 + \theta_2)
-
-```
-
+$$
 
 ### Python Implementation
 
@@ -215,7 +199,7 @@ End-effector position: (1.414, 1.157)
 
 ## Inverse Kinematics (IK)
 
-**Problem:** Given desired end-effector pose, find joint angles **q**
+**Problem:** Given desired end-effector pose, find joint angles $\mathbf{q}$
 
 **Challenge:**
 - No closed-form solution for n > 3 DOF
@@ -224,18 +208,14 @@ End-effector position: (1.414, 1.157)
 
 ### Analytical IK (2-DOF Example)
 
-**Given:** Target position `(x_d, y_d)`
+**Given:** Target position $(x_d, y_d)$
 
 **Solve:**
 
 1. **Distance to target:**
-   
-```
-
+   $$
    r = \sqrt{x_d^2 + y_d^2}
-   
-```
-
+   $$
 
 2. **Elbow angle θ₂ (using law of cosines):**
 
@@ -331,20 +311,16 @@ For robots with n > 3 DOF, use **Jacobian pseudoinverse** method:
 
 ### Jacobian Matrix
 
-**Jacobian** relates joint velocities **q̇** to end-effector velocity **v**:
+**Jacobian** relates joint velocities $\dot{\mathbf{q}}$ to end-effector velocity $\mathbf{v}$:
 
-
-```
-
+$$
 \mathbf{v} = J(\mathbf{q}) \dot{\mathbf{q}}
-
-```
-
+$$
 
 Where:
-- `\mathbf{v} = [v_x, v_y, v_z, \omega_x, \omega_y, \omega_z]^T` (6D velocity)
-- J is 6×n matrix
-- `\dot{\mathbf{q}} = [\dot{\theta}_1, \ldots, \dot{\theta}_n]^T` (joint velocities)
+- $\mathbf{v} = [v_x, v_y, v_z, \omega_x, \omega_y, \omega_z]^T$ (6D velocity)
+- $J$ is $6 \times n$ matrix
+- $\dot{\mathbf{q}} = [\dot{\theta}_1, \ldots, \dot{\theta}_n]^T$ (joint velocities)
 
 ### Iterative IK Algorithm
 
@@ -398,15 +374,11 @@ def ik_jacobian_pseudoinverse(self, target_pose, q_init, max_iter=100, tol=1e-3)
 
 Near singularities (Jacobian rank-deficient), use **damped least squares**:
 
-
-```
-
+$$
 \dot{\mathbf{q}} = J^T (J J^T + \lambda^2 I)^{-1} \mathbf{v}
+$$
 
-```
-
-
-Where λ is damping factor (e.g., 0.01-0.1)
+Where $\lambda$ is damping factor (e.g., 0.01-0.1)
 
 ```python
 # Replace pseudoinverse line with:
@@ -453,28 +425,20 @@ def compute_jacobian_numerical(self, q, delta=1e-6):
 
 ### Analytical Jacobian (Faster, Exact)
 
-For revolute joint `i` with axis `\mathbf{z}_i` and position `\mathbf{p}_i`:
+For revolute joint $i$ with axis $\mathbf{z}_i$ and position $\mathbf{p}_i$:
 
-
-```
-
+$$
 J_v^i = \mathbf{z}_i \times (\mathbf{p}_{\text{ee}} - \mathbf{p}_i)
+$$
 
-```
-
-
-
-```
-
+$$
 J_\omega^i = \mathbf{z}_i
-
-```
-
+$$
 
 Where:
-- `J_v^i` = linear velocity contribution (3x1)
-- `J_\omega^i` = angular velocity contribution (3x1)
-- `\mathbf{p}_{\text{ee}}` = end-effector position
+- $J_v^i$ = linear velocity contribution (3x1)
+- $J_\omega^i$ = angular velocity contribution (3x1)
+- $\mathbf{p}_{\text{ee}}$ = end-effector position
 
 ```python
 def compute_jacobian_analytical(self, q):
@@ -512,47 +476,35 @@ def compute_jacobian_analytical(self, q):
 
 **Manipulator dynamics** (Lagrangian formulation):
 
-
-```
-
+$$
 \mathbf{M}(\mathbf{q}) \ddot{\mathbf{q}} + \mathbf{C}(\mathbf{q}, \dot{\mathbf{q}}) \dot{\mathbf{q}} + \mathbf{g}(\mathbf{q}) = \boldsymbol{\tau}
-
-```
-
+$$
 
 Where:
-- `\mathbf{M}(\mathbf{q})` = Mass/inertia matrix (nxn)
-- `\mathbf{C}(\mathbf{q}, \dot{\mathbf{q}})` = Coriolis and centrifugal forces (nxn)
-- `\mathbf{g}(\mathbf{q})` = Gravity torques (n)
-- **τ** = Joint torques (control input)
+- $\mathbf{M}(\mathbf{q})$ = Mass/inertia matrix (nxn)
+- $\mathbf{C}(\mathbf{q}, \dot{\mathbf{q}})$ = Coriolis and centrifugal forces (nxn)
+- $\mathbf{g}(\mathbf{q})$ = Gravity torques (n)
+- $\boldsymbol{\tau}$ = Joint torques (control input)
 
 ### Forward Dynamics
 
-**Given:** Joint torques **τ**
-**Find:** Joint accelerations **q̈**
+**Given:** Joint torques $\boldsymbol{\tau}$
+**Find:** Joint accelerations $\ddot{\mathbf{q}}$
 
-
-```
-
+$$
 \ddot{\mathbf{q}} = \mathbf{M}^{-1}(\mathbf{q}) \left[\boldsymbol{\tau} - \mathbf{C}(\mathbf{q}, \dot{\mathbf{q}}) \dot{\mathbf{q}} - \mathbf{g}(\mathbf{q})\right]
-
-```
-
+$$
 
 **Use case:** Physics simulation (Gazebo, Isaac Sim)
 
 ### Inverse Dynamics
 
-**Given:** Desired trajectory `\mathbf{q}(t), \dot{\mathbf{q}}(t), \ddot{\mathbf{q}}(t)`
-**Find:** Required torques `\boldsymbol{\tau}(t)`
+**Given:** Desired trajectory $\mathbf{q}(t), \dot{\mathbf{q}}(t), \ddot{\mathbf{q}}(t)$
+**Find:** Required torques $\boldsymbol{\tau}(t)$
 
-
-```
-
+$$
 \boldsymbol{\tau} = \mathbf{M}(\mathbf{q}) \ddot{\mathbf{q}} + \mathbf{C}(\mathbf{q}, \dot{\mathbf{q}}) \dot{\mathbf{q}} + \mathbf{g}(\mathbf{q})
-
-```
-
+$$
 
 **Use case:** Feedforward control, trajectory optimization
 

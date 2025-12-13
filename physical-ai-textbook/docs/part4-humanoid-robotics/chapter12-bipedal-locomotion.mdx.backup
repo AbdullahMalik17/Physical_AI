@@ -43,17 +43,13 @@ import ChatRAG from '@site/src/components/ChatRAG';
 
 **Definition:** Weighted average position of all body mass
 
-
-```
-
+$$
 \mathbf{r}_{\text{CoM}} = \frac{\sum_i m_i \mathbf{r}_i}{\sum_i m_i}
-
-```
-
+$$
 
 Where:
-- `m_i` = mass of link `i`
-- `\mathbf{r}_i` = position of link `i`
+- $m_i$ = mass of link $i$
+- $\mathbf{r}_i$ = position of link $i$
 
 **For humanoid robot:**
 ```python
@@ -85,28 +81,20 @@ def compute_com(self, joint_positions):
 
 **ZMP Equation (Vukobratović, 1972):**
 
-
-```
-
+$$
 \mathbf{p}_{\text{ZMP}} = \frac{\sum_i m_i (\ddot{z}_i + g) \mathbf{r}_i - \sum_i \dot{\mathbf{H}}_i}{\sum_i m_i (\ddot{z}_i + g)}
-
-```
-
+$$
 
 Where:
-- `\ddot{z}_i` = vertical acceleration of link `i`
-- `g` = gravitational acceleration
-- `\mathbf{H}_i` = angular momentum of link `i`
+- $\ddot{z}_i$ = vertical acceleration of link $i$
+- $g$ = gravitational acceleration
+- $\mathbf{H}_i$ = angular momentum of link $i$
 
 **Simplified 2D ZMP (constant height CoM):**
 
-
-```
-
+$$
 x_{\text{ZMP}} = x_{\text{CoM}} - \frac{z_{\text{CoM}}}{g} \ddot{x}_{\text{CoM}}
-
-```
-
+$$
 
 ### Support Polygon
 
@@ -185,31 +173,23 @@ def is_dynamically_stable(self, zmp, support_polygon):
 ### Linear Inverted Pendulum Model (LIPM)
 
 **Assumptions:**
-1. CoM height is constant: `z_{\text{CoM}} = h`
+1. CoM height is constant: $z_{\text{CoM}} = h$
 2. All mass concentrated at CoM
 3. Massless telescopic legs
 
 **Equation of motion (2D):**
 
-
-```
-
+$$
 \ddot{x}_{\text{CoM}} = \frac{g}{h} (x_{\text{CoM}} - x_{\text{ZMP}})
-
-```
-
+$$
 
 **Solution (exponential dynamics):**
 
-
-```
-
+$$
 x_{\text{CoM}}(t) = x_{\text{ZMP}} + (x_0 - x_{\text{ZMP}}) \cosh(\omega t) + \frac{\dot{x}_0}{\omega} \sinh(\omega t)
+$$
 
-```
-
-
-Where `\omega = \sqrt{g/h}` is the natural frequency
+Where $\omega = \sqrt{g/h}$ is the natural frequency
 
 ### Python Implementation: LIPM Walking
 
@@ -357,13 +337,9 @@ if __name__ == '__main__':
 
 **Cost Function:**
 
-
-```
-
+$$
 J = \sum_{i=k}^{k+N} \left[ Q_e (p_{\text{ZMP},i} - p_{\text{ZMP},i}^{\text{ref}})^2 + Q_x \ddot{x}_{\text{CoM},i}^2 \right]
-
-```
-
+$$
 
 Minimize:
 - ZMP tracking error (stay balanced)
@@ -432,13 +408,9 @@ def preview_control_zmp(zmp_ref, N=100, Q_e=1.0, Q_x=1e-6):
 
 **Definition:** Point where the robot must step to come to a stop
 
-
-```
-
+$$
 \mathbf{r}_{\text{CP}} = \mathbf{r}_{\text{CoM}} + \frac{1}{\omega} \dot{\mathbf{r}}_{\text{CoM}}
-
-```
-
+$$
 
 **Use case:**
 - Fall detection: If CP is outside reachable footstep region → cannot recover
@@ -661,9 +633,7 @@ def detect_terrain_slope(self):
 
 **Optimization Problem:**
 
-
-```
-
+$$
 \begin{aligned}
 \min_{\ddot{\mathbf{q}}, \boldsymbol{\tau}, \mathbf{f}} \quad & \| \ddot{\mathbf{x}} - \ddot{\mathbf{x}}^{\text{des}} \|^2 + \lambda \| \boldsymbol{\tau} \|^2 \\
 \text{subject to} \quad & \mathbf{M}(\mathbf{q}) \ddot{\mathbf{q}} + \mathbf{h}(\mathbf{q}, \dot{\mathbf{q}}) = \boldsymbol{\tau} + J_c^T \mathbf{f} \\
@@ -671,9 +641,7 @@ def detect_terrain_slope(self):
 & \mathbf{f}_z \geq 0 \quad \text{(unilateral force)} \\
 & |\mathbf{f}_x|, |\mathbf{f}_y| \leq \mu \mathbf{f}_z \quad \text{(friction cone)}
 \end{aligned}
-
-```
-
+$$
 
 ### Python Implementation with OSQP
 
