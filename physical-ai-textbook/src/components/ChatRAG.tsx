@@ -230,14 +230,10 @@ export default function ChatRAG({
 
   return (
     <div className="tw-flex tw-flex-col" style={{
-      height: '440px',
-      maxHeight: '80vh',
+      height: '100%',
       fontFamily: 'system-ui, -apple-system, sans-serif',
-      borderRadius: '16px',
       overflow: 'hidden',
-      background: 'var(--ifm-background-color, #ffffff)',
-      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05)',
-      border: '1px solid var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))'
+      background: 'var(--ifm-background-color, #ffffff)'
     }}>
       {/* Simple Clean Header */}
       <div style={{
