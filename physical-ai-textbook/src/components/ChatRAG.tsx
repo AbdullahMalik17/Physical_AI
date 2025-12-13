@@ -132,25 +132,20 @@ export default function ChatRAG({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   const scrollToBottom = () => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  const handleScroll = () => {
-    if (messagesContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      setShouldAutoScroll(isNearBottom);
+    if (messagesEndRef.current) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      }, 100);
     }
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, shouldAutoScroll]);
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages.length]);
 
   useEffect(() => {
     if (useRealAPI) {
@@ -247,6 +242,12 @@ export default function ChatRAG({
       overflow: 'hidden',
       background: 'var(--ifm-background-color, #ffffff)'
     }}>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
       {/* Simple Clean Header */}
       <div style={{
         padding: '12px 16px',
@@ -283,14 +284,13 @@ export default function ChatRAG({
         {/* Messages Area - Scrollable */}
         <div
           ref={messagesContainerRef}
-          onScroll={handleScroll}
           className="tw-overflow-y-auto"
           style={{
             flex: 1,
             minHeight: 0,
-            padding: '12px',
+            padding: '16px',
             overflowY: 'auto',
-            scrollBehavior: 'smooth'
+            overflowX: 'hidden'
           }}
         >
           {messages.length === 0 ? (
@@ -321,30 +321,37 @@ export default function ChatRAG({
               </p>
             </div>
           ) : (
-            <div className="tw-space-y-3">
+            <div className="tw-space-y-4">
               {messages.map((message, index) => (
                 <div
                   key={index}
                   className={`tw-flex ${
                     message.role === 'user' ? 'tw-justify-end' : 'tw-justify-start'
                   }`}
+                  style={{ animation: 'fadeIn 0.3s ease-in' }}
                 >
                   <div
                     style={{
                       maxWidth: '85%',
                       background: message.role === 'user'
-                        ? 'var(--ifm-color-primary, #2563eb)'
-                        : 'var(--ifm-background-surface-color, #f1f5f9)',
+                        ? 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'
+                        : '#ffffff',
                       color: message.role === 'user'
                         ? '#ffffff'
                         : 'var(--ifm-font-color-base, #1e293b)',
-                      borderRadius: '16px',
-                      padding: '10px 14px',
+                      borderRadius: '18px',
+                      padding: '12px 16px',
                       fontSize: '14px',
-                      lineHeight: '1.5',
+                      lineHeight: '1.6',
                       fontFamily: 'system-ui, -apple-system, sans-serif',
                       wordBreak: 'break-word',
-                      whiteSpace: 'pre-wrap'
+                      whiteSpace: 'pre-wrap',
+                      boxShadow: message.role === 'user'
+                        ? '0 2px 8px rgba(37, 99, 235, 0.25)'
+                        : '0 1px 3px rgba(0, 0, 0, 0.1)',
+                      border: message.role === 'assistant'
+                        ? '1px solid var(--ifm-color-emphasis-200, #e5e7eb)'
+                        : 'none'
                     }}
                   >
                     {message.role === 'assistant' ? (
@@ -390,14 +397,15 @@ export default function ChatRAG({
           )}
         </div>
 
-        {/* Input Area - Clean and Simple */}
+        {/* Input Area - Beautiful & Functional */}
         <div style={{
-          borderTop: '1px solid var(--ifm-color-emphasis-200, rgba(0, 0, 0, 0.1))',
-          padding: '12px',
+          borderTop: '1px solid var(--ifm-color-emphasis-200, #e5e7eb)',
+          padding: '16px',
           flexShrink: 0,
-          background: 'var(--ifm-background-color, #ffffff)'
+          background: 'var(--ifm-background-color, #ffffff)',
+          boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.03)'
         }}>
-          <div className="tw-flex tw-items-center tw-gap-2">
+          <div className="tw-flex tw-items-center tw-gap-3">
             <input
               ref={inputRef}
               type="text"
@@ -408,52 +416,81 @@ export default function ChatRAG({
               disabled={isLoading || (messageLimit !== undefined && messageCount >= messageLimit)}
               style={{
                 flex: 1,
-                background: 'var(--ifm-background-color, #ffffff)',
+                background: 'var(--ifm-background-surface-color, #f9fafb)',
                 color: 'var(--ifm-font-color-base, #1e293b)',
-                borderRadius: '12px',
-                padding: '8px 12px',
+                borderRadius: '14px',
+                padding: '10px 16px',
                 fontSize: '14px',
                 outline: 'none',
-                border: '1px solid var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))',
+                border: '1.5px solid var(--ifm-color-emphasis-200, #e5e7eb)',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s ease',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = 'var(--ifm-color-primary, #2563eb)';
-                e.currentTarget.style.boxShadow = '0 0 0 2px var(--ifm-color-primary-lightest, rgba(37, 99, 235, 0.1))';
+                e.currentTarget.style.borderColor = '#2563eb';
+                e.currentTarget.style.background = '#ffffff';
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05)';
               }}
               onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))';
-                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.borderColor = 'var(--ifm-color-emphasis-200, #e5e7eb)';
+                e.currentTarget.style.background = 'var(--ifm-background-surface-color, #f9fafb)';
+                e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
               }}
             />
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim() || (messageLimit !== undefined && messageCount >= messageLimit)}
               style={{
-                background: 'var(--ifm-color-primary, #2563eb)',
+                background: isLoading || !input.trim()
+                  ? '#94a3b8'
+                  : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                 color: '#ffffff',
-                fontWeight: 500,
-                padding: '8px 12px',
-                borderRadius: '12px',
+                fontWeight: 600,
+                padding: '10px 20px',
+                borderRadius: '14px',
                 fontSize: '14px',
                 border: 'none',
                 cursor: isLoading || !input.trim() ? 'not-allowed' : 'pointer',
-                opacity: isLoading || !input.trim() ? 0.5 : 1,
                 fontFamily: 'system-ui, -apple-system, sans-serif',
-                transition: 'opacity 0.2s'
+                transition: 'all 0.2s ease',
+                boxShadow: isLoading || !input.trim()
+                  ? 'none'
+                  : '0 2px 8px rgba(37, 99, 235, 0.25)',
+                transform: 'scale(1)'
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading && input.trim()) {
+                  e.currentTarget.style.transform = 'scale(1.02)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.35)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = isLoading || !input.trim()
+                  ? 'none'
+                  : '0 2px 8px rgba(37, 99, 235, 0.25)';
               }}
             >
-              Send
+              {isLoading ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="tw-animate-spin" style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid #ffffff', borderTopColor: 'transparent', borderRadius: '50%' }}></span>
+                  Sending
+                </span>
+              ) : 'Send'}
             </button>
           </div>
           <div style={{
-            marginTop: '8px',
+            marginTop: '10px',
             fontSize: '11px',
             color: 'var(--ifm-color-emphasis-600, #64748b)',
-            fontFamily: 'system-ui, -apple-system, sans-serif'
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
           }}>
-            Tip: Try "What is ROS 2?" or "How does LiDAR work?"
+            <span>💡</span>
+            <span>Try: "What is ROS 2?" or "How does LiDAR work?"</span>
           </div>
         </div>
       </div>
