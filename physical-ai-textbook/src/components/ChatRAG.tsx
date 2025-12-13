@@ -111,6 +111,32 @@ export default function ChatRAG({
   const STORAGE_KEY = 'chatrag_usage';
   const STORAGE_DATE_KEY = 'chatrag_usage_date';
 
+  // Add custom scrollbar styles
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(148, 163, 184, 0.08);
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.3) 0%, rgba(71, 85, 105, 0.3) 100%);
+        border-radius: 4px;
+        transition: all 0.2s;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(71, 85, 105, 0.5) 100%);
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const getInitialMessageCount = (): number => {
     if (!resetLimitDaily || typeof window === 'undefined') return 0;
     const today = new Date().toDateString();
@@ -229,44 +255,149 @@ export default function ChatRAG({
   };
 
   return (
-    <div className="tw-flex tw-flex-col" style={{ height: '100%', fontFamily: 'system-ui, -apple-system, "Inter", sans-serif' }}>
+    <div className="tw-flex tw-flex-col" style={{
+      height: '600px',
+      maxHeight: '80vh',
+      fontFamily: 'system-ui, -apple-system, "Inter", sans-serif',
+      borderRadius: '16px',
+      overflow: 'hidden',
+      background: 'linear-gradient(to bottom, #ffffff, #f8fafc)',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+      border: '1px solid rgba(148, 163, 184, 0.2)'
+    }}>
+      {/* Header - Beautiful Gradient Bar */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+        padding: '16px 24px',
+        borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div className="tw-flex tw-items-center tw-gap-3">
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '22px',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            🤖
+          </div>
+          <div>
+            <h3 style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: 600,
+              color: '#f1f5f9',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>
+              AI Assistant
+            </h3>
+            <p style={{
+              margin: 0,
+              fontSize: '12px',
+              color: 'rgba(241, 245, 249, 0.7)',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}>
+              {apiStatus === 'available' ? '● Online - Powered by RAG' : '● Simulated Mode'}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Chat Container */}
       <div className="tw-flex tw-flex-col tw-overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
-        {/* Messages Area */}
-        <div className="tw-overflow-y-auto tw-px-6 tw-py-6" style={{ flex: 1, minHeight: 0 }}>
+        {/* Messages Area - FIXED: Now properly scrollable with custom scrollbar */}
+        <div
+          className="tw-overflow-y-auto tw-px-6 tw-py-6 custom-scrollbar"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            scrollBehavior: 'smooth'
+          }}
+        >
           {messages.length === 0 ? (
             <div className="tw-h-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-text-center tw-px-4">
               <div style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '16px',
-                background: 'rgba(100, 116, 139, 0.1)',
+                width: '80px',
+                height: '80px',
+                borderRadius: '20px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: '20px',
-                fontSize: '32px'
+                marginBottom: '24px',
+                fontSize: '40px',
+                boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(139, 92, 246, 0.2)'
               }}>
                 🤖
               </div>
               <h4 style={{
-                fontSize: '18px',
-                fontWeight: 600,
-                color: '#1e293b',
-                marginBottom: '8px',
+                fontSize: '22px',
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #1e293b 0%, #475569 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                marginBottom: '12px',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
               }}>
-                How can I help you?
+                How can I help you learn today?
               </h4>
               <p style={{
-                fontSize: '14px',
+                fontSize: '15px',
                 color: '#64748b',
-                maxWidth: '320px',
-                lineHeight: '1.5',
+                maxWidth: '380px',
+                lineHeight: '1.6',
+                marginBottom: '24px',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
               }}>
-                Ask me about Physical AI, ROS 2, sensors, Gazebo, Unity, or robotics concepts.
+                Ask me anything about Physical AI, ROS 2, sensors, simulation, or robotics concepts.
               </p>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                justifyContent: 'center',
+                maxWidth: '420px'
+              }}>
+                {['What is ROS 2?', 'How does LiDAR work?', 'Explain URDF format', 'Show me a node example'].map((suggestion, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInput(suggestion)}
+                    style={{
+                      background: 'white',
+                      border: '1px solid rgba(148, 163, 184, 0.2)',
+                      borderRadius: '12px',
+                      padding: '8px 14px',
+                      fontSize: '13px',
+                      color: '#475569',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      fontFamily: 'system-ui, -apple-system, sans-serif',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f8fafc';
+                      e.currentTarget.style.borderColor = '#1e293b';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'white';
+                      e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="tw-space-y-6">
@@ -398,13 +529,13 @@ export default function ChatRAG({
           )}
         </div>
 
-        {/* Input Area - Prominent Bottom Section */}
+        {/* Input Area - Prominent Bottom Section with Gradient Border */}
         <div style={{
-          borderTop: '2px solid rgba(148, 163, 184, 0.2)',
-          padding: '18px 20px 20px 20px',
+          borderTop: '1px solid rgba(148, 163, 184, 0.15)',
+          padding: '20px 24px 24px 24px',
           flexShrink: 0,
-          background: 'rgba(248, 250, 252, 0.8)',
-          backdropFilter: 'blur(8px)',
+          background: 'linear-gradient(to top, #ffffff 0%, #f8fafc 100%)',
+          boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.03)'
         }}>
           <div className="tw-relative tw-flex tw-items-end tw-gap-3">
             <textarea
