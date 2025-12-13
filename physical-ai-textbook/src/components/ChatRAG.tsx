@@ -130,15 +130,27 @@ export default function ChatRAG({
   const [apiStatus, setApiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [messageCount, setMessageCount] = useState<number>(getInitialMessageCount());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (shouldAutoScroll && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShouldAutoScroll(isNearBottom);
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, shouldAutoScroll]);
 
   useEffect(() => {
     if (useRealAPI) {
@@ -270,6 +282,8 @@ export default function ChatRAG({
       <div className="tw-flex tw-flex-col tw-overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
         {/* Messages Area - Scrollable */}
         <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
           className="tw-overflow-y-auto"
           style={{
             flex: 1,

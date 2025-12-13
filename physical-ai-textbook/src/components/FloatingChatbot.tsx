@@ -4,6 +4,8 @@ import ChatRAG from './ChatRAG';
 export default function FloatingChatbot(): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+  const [size, setSize] = useState({ width: 420, height: 600 });
+  const [isResizing, setIsResizing] = useState(false);
 
   const toggleChat = () => {
     setIsOpen(!isOpen);
@@ -11,6 +13,35 @@ export default function FloatingChatbot(): React.JSX.Element {
 
   const handleClearChat = () => {
     setResetKey(prev => prev + 1);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = size.width;
+    const startHeight = size.height;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = startX - e.clientX;
+      const deltaY = startY - e.clientY;
+
+      const newWidth = Math.max(320, Math.min(800, startWidth + deltaX));
+      const newHeight = Math.max(400, Math.min(900, startHeight + deltaY));
+
+      setSize({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
   return (
@@ -59,19 +90,20 @@ export default function FloatingChatbot(): React.JSX.Element {
             position: 'fixed',
             bottom: '92px',
             right: '24px',
-            width: '420px',
+            width: `${size.width}px`,
             maxWidth: 'calc(100vw - 48px)',
-            height: '600px',
+            height: `${size.height}px`,
             maxHeight: 'calc(100vh - 130px)',
             zIndex: 9999,
             boxShadow: '0 10px 40px rgba(0, 0, 0, 0.15)',
             borderRadius: '16px',
             overflow: 'hidden',
-            animation: 'slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            animation: isResizing ? 'none' : 'slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             background: 'var(--ifm-background-color, #ffffff)',
             border: '1px solid var(--ifm-color-emphasis-300, rgba(0, 0, 0, 0.1))',
             display: 'flex',
             flexDirection: 'column',
+            userSelect: isResizing ? 'none' : 'auto',
           }}
         >
           <style>
@@ -135,6 +167,37 @@ export default function FloatingChatbot(): React.JSX.Element {
               messageLimit={10}
               resetLimitDaily={true}
             />
+          </div>
+
+          {/* Resize Handle - Bottom Left Corner */}
+          <div
+            onMouseDown={handleMouseDown}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              width: '40px',
+              height: '40px',
+              cursor: 'nwse-resize',
+              zIndex: 10000,
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'flex-start',
+              padding: '8px',
+              opacity: 0.5,
+              transition: 'opacity 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '0.5';
+            }}
+            title="Drag to resize"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transform: 'rotate(90deg)' }}>
+              <path d="M14 2L2 14M14 8L8 14M14 14L14 14.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--ifm-color-emphasis-600, #64748b)' }}/>
+            </svg>
           </div>
         </div>
       )}
