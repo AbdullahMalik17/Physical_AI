@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import ChatRAG from './ChatRAG';
+import ChatKitBot from './ChatKitBot';
 
 export default function FloatingChatbot(): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
@@ -159,13 +159,11 @@ export default function FloatingChatbot(): React.JSX.Element {
             display: 'flex',
             flexDirection: 'column',
           }}>
-            <ChatRAG
+            <ChatKitBot
               key={resetKey}
               context="Physical AI, robotics, sensors, motors, simulation, ROS 2"
               placeholder="Ask about Physical AI, ROS 2, sensors..."
               useRealAPI={false}
-              messageLimit={10}
-              resetLimitDaily={true}
             />
           </div>
 

@@ -10,40 +10,118 @@
 @tailwind utilities;
 
 /* Docusaurus Infima variable overrides - Dark/Cyberpunk Theme */
+/* ==========================================================================
+   THEME OPTION 1: CYBERPUNK NEON (Active - Best for Hackathon)
+   - High contrast, glowing effects, sci-fi aesthetic
+   ========================================================================== */
 :root {
-  --ifm-color-primary: #00d9ff;
-  --ifm-color-primary-dark: #00b8d9;
-  --ifm-color-primary-darker: #00a3c4;
-  --ifm-color-primary-darkest: #0087a3;
-  --ifm-color-primary-light: #1ae3ff;
-  --ifm-color-primary-lighter: #33e7ff;
-  --ifm-color-primary-lightest: #66eeff;
+  /* Primary Color: Neon Cyan 
+  --ifm-color-primary: #00f2ff;
+  --ifm-color-primary-dark: #00dbea;
+  --ifm-color-primary-darker: #00c7d5;
+  --ifm-color-primary-darkest: #00a4b0;
+  --ifm-color-primary-light: #26f5ff;
+  --ifm-color-primary-lighter: #4df7ff;
+  --ifm-color-primary-lightest: #80fbff;
 
-  --ifm-background-color: #0f0f23;
+  /* Backgrounds: Deep Space Blue */
+  --ifm-background-color: #050511;
+  --ifm-background-surface-color: #0b0b1e;
+
+  /* UI Elements */
   --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', monospace;
-  --ifm-code-background: #1a1a2e;
-
+  --ifm-code-background: #0f0f26;
   --ifm-heading-color: #ffffff;
-  --ifm-font-color-base: #e0e0e0;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 217, 255, 0.1);
+  --ifm-font-color-base: #e2e8f0;
+
+  /* Bot Specific - Glowing Accents */
+  --bubble-bot: rgba(0, 242, 255, 0.1);
+  --bubble-user: rgba(189, 0, 255, 0.1);
+  --accent-primary: #caf1f3;
+  --accent-secondary: #bd00ff;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(15, 15, 38, 0.7);
+  --glass-border: 1px solid rgba(0, 242, 255, 0.2);
 }
 
-/* Dark mode theme (default) */
 [data-theme='dark'] {
-  --ifm-color-primary: #00d9ff;
-  --ifm-color-primary-dark: #00b8d9;
-  --ifm-color-primary-darker: #00a3c4;
-  --ifm-color-primary-darkest: #0087a3;
-  --ifm-color-primary-light: #1ae3ff;
-  --ifm-color-primary-lighter: #33e7ff;
-  --ifm-color-primary-lightest: #66eeff;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 217, 255, 0.2);
+  --ifm-color-primary: #00f2ff;
+  --ifm-color-primary-dark: #00dbea;
+  --ifm-color-primary-darker: #00c7d5;
+  --ifm-color-primary-darkest: #00a4b0;
+  --ifm-color-primary-light: #26f5ff;
+  --ifm-color-primary-lighter: #4df7ff;
+  --ifm-color-primary-lightest: #80fbff;
 }
+
+/*
+/* ==========================================================================
+   THEME OPTION 2: PROFESSIONAL BLUE (Uncomment to Enable)
+   - Trustworthy, clean, corporate, high accessibility
+   ========================================================================== */
+/*
+:root {
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1d4ed8;
+  --ifm-color-primary-darker: #1e40af;
+  --ifm-color-primary-darkest: #1e3a8a;
+  --ifm-color-primary-light: #3b82f6;
+  --ifm-color-primary-lighter: #60a5fa;
+  --ifm-color-primary-lightest: #93c5fd;
+
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f8fafc;
+  
+  --ifm-font-color-base: #1e293b;
+  --ifm-heading-color: #0f172a;
+  
+  --bubble-bot: #eff6ff;
+  --bubble-user: #2563eb;
+  --accent-primary: #2563eb;
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: 1px solid #e2e8f0;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #3b82f6;
+  --ifm-color-primary-dark: #2563eb;
+  --ifm-color-primary-darker: #1d4ed8;
+  --ifm-color-primary-darkest: #1e40af;
+  --ifm-color-primary-light: #60a5fa;
+  --ifm-color-primary-lighter: #93c5fd;
+  --ifm-color-primary-lightest: #bfdbfe;
+  
+  --ifm-background-color: #0f172a;
+  --ifm-background-surface-color: #1e293b;
+}
+*/
+
+/* ==========================================================================
+   THEME OPTION 3: VIBRANT GRADIENT (Uncomment to Enable)
+   - Energetic, creative, warm, friendly
+   ========================================================================== */
+/*
+:root {
+  --ifm-color-primary: #8b5cf6;
+  --ifm-color-primary-dark: #7c3aed;
+  --ifm-color-primary-darker: #6d28d9;
+  --ifm-color-primary-darkest: #5b21b6;
+  --ifm-color-primary-light: #a78bfa;
+  --ifm-color-primary-lighter: #c4b5fd;
+  --ifm-color-primary-lightest: #ddd6fe;
+
+  --ifm-background-color: #121016; 
+  --bubble-bot: rgba(139, 92, 246, 0.15);
+  --bubble-user: rgba(244, 63, 94, 0.15);
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #f43f5e;
+}
+*/
 
 /* Hero title gradient (landing page) */
 .hero__title {
-  background: linear-gradient(90deg, #00d9ff, #bd00ff);
+  background: linear-gradient(90deg, #a5e6f2, #bd00ff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -57,5 +135,5 @@
 /* Code blocks */
 .theme-code-block {
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 6px rgba(171, 170, 170, 0.3);
 }
