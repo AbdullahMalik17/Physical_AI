@@ -43,6 +43,15 @@
   /* Glassmorphism */
   --glass-bg: rgba(15, 15, 38, 0.7);
   --glass-border: 1px solid rgba(0, 242, 255, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --glass-blur: blur(8px);
+}
+
+/* Base styling enhancements */
+body {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+  opacity: 0.98;
 }
 
 [data-theme='dark'] {
@@ -55,69 +64,64 @@
   --ifm-color-primary-lightest: #80fbff;
 }
 
-/*
-/* ==========================================================================
-   THEME OPTION 2: PROFESSIONAL BLUE (Uncomment to Enable)
-   - Trustworthy, clean, corporate, high accessibility
-   ========================================================================== */
-/*
-:root {
-  --ifm-color-primary: #2563eb;
-  --ifm-color-primary-dark: #1d4ed8;
-  --ifm-color-primary-darker: #1e40af;
-  --ifm-color-primary-darkest: #1e3a8a;
-  --ifm-color-primary-light: #3b82f6;
-  --ifm-color-primary-lighter: #60a5fa;
-  --ifm-color-primary-lightest: #93c5fd;
-
-  --ifm-background-color: #ffffff;
-  --ifm-background-surface-color: #f8fafc;
-  
-  --ifm-font-color-base: #1e293b;
-  --ifm-heading-color: #0f172a;
-  
-  --bubble-bot: #eff6ff;
-  --bubble-user: #2563eb;
-  --accent-primary: #2563eb;
-  --glass-bg: rgba(255, 255, 255, 0.9);
-  --glass-border: 1px solid #e2e8f0;
+/* Author Card & Premium Elements */
+.author-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-[data-theme='dark'] {
-  --ifm-color-primary: #3b82f6;
-  --ifm-color-primary-dark: #2563eb;
-  --ifm-color-primary-darker: #1d4ed8;
-  --ifm-color-primary-darkest: #1e40af;
-  --ifm-color-primary-light: #60a5fa;
-  --ifm-color-primary-lighter: #93c5fd;
-  --ifm-color-primary-lightest: #bfdbfe;
-  
-  --ifm-background-color: #0f172a;
-  --ifm-background-surface-color: #1e293b;
+.author-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px 0 rgba(0, 242, 255, 0.2);
 }
-*/
 
-/* ==========================================================================
-   THEME OPTION 3: VIBRANT GRADIENT (Uncomment to Enable)
-   - Energetic, creative, warm, friendly
-   ========================================================================== */
-/*
-:root {
-  --ifm-color-primary: #8b5cf6;
-  --ifm-color-primary-dark: #7c3aed;
-  --ifm-color-primary-darker: #6d28d9;
-  --ifm-color-primary-darkest: #5b21b6;
-  --ifm-color-primary-light: #a78bfa;
-  --ifm-color-primary-lighter: #c4b5fd;
-  --ifm-color-primary-lightest: #ddd6fe;
-
-  --ifm-background-color: #121016; 
-  --bubble-bot: rgba(139, 92, 246, 0.15);
-  --bubble-user: rgba(244, 63, 94, 0.15);
-  --accent-primary: #8b5cf6;
-  --accent-secondary: #f43f5e;
+.author-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid var(--ifm-color-primary);
+  object-fit: cover;
 }
-*/
+
+.author-info h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--ifm-color-primary);
+}
+
+.author-info p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.github-cta {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(45deg, var(--ifm-color-primary), var(--accent-secondary));
+  color: white !important;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  text-decoration: none !important;
+  font-weight: bold;
+  margin-top: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 242, 255, 0.3);
+}
+
+.github-cta:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(189, 0, 255, 0.4);
+}
 
 /* Hero title gradient (landing page) */
 .hero__title {

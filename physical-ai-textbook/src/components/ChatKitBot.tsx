@@ -11,6 +11,9 @@ import {
 } from '@chatscope/chat-ui-kit-react';
 import styles from './ChatKitBot.module.css';
 
+// ElevenLabs Configuration
+const DEFAULT_VOICE_ID = 'pNInz6obpguXPBWmwttX'; // Adam voice
+
 interface ChatMessage {
   id: string;
   message: string;
@@ -41,7 +44,101 @@ export default function ChatKitBot({
   ]);
   const [isTyping, setIsTyping] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  
+  // Media Recorder for ElevenLabs STT
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Toggle Voice Recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        await handleVoiceToText(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isListening) {
+      mediaRecorderRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  const handleVoiceToText = async (audioBlob: Blob) => {
+    setIsTyping(true);
+    try {
+      // Use ElevenLabs Speech-to-Text (Scribe)
+      const response = await fetch('/api/elevenlabs?action=stt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/wav' },
+        body: audioBlob,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const transcript = data.text || '';
+        if (transcript) {
+          setInputValue(transcript);
+          // Optional: Auto-send if transcript is confident
+          // handleSend(transcript);
+        }
+      } else {
+        console.error('ElevenLabs STT failed');
+      }
+    } catch (err) {
+      console.error('STT Error:', err);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Text-to-Speech: Bot talking back
+  const speakResponse = async (text: string) => {
+    if (!isVoiceEnabled) return;
+
+    try {
+      const response = await fetch('/api/elevenlabs?action=tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          text, 
+          voiceId: DEFAULT_VOICE_ID 
+        }),
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      }
+    } catch (err) {
+      console.error('TTS Error:', err);
+    }
+  };
 
   // Quick question suggestions
   const quickQuestions = [
@@ -63,7 +160,6 @@ export default function ChatKitBot({
   const handleSend = async (message: string) => {
     if (!message.trim()) return;
 
-    // Add user message
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       message: message,
@@ -77,11 +173,8 @@ export default function ChatKitBot({
     setIsTyping(true);
 
     try {
-      let response: string;
-      let sources: any[] = [];
-
+      let botResponse: string;
       if (useRealAPI) {
-        // Call real RAG API
         const apiResponse = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -97,46 +190,31 @@ export default function ChatKitBot({
 
         if (apiResponse.ok) {
           const data = await apiResponse.json();
-          response = data.response;
-          sources = data.sources || [];
+          botResponse = data.response;
         } else {
-          response = "Sorry, I'm having trouble connecting right now. Please try again.";
+          botResponse = "I'm having trouble connecting to my brain right now.";
         }
       } else {
-        // Simulated responses (fallback)
-        response = getSimulatedResponse(message);
+        botResponse = getSimulatedResponse(message);
       }
 
-      // Add sources to response if available
-      if (sources.length > 0) {
-        const sourceLinks = sources
-          .map((s) => `📚 ${s.title}`)
-          .join('\n');
-        response += `\n\n**Sources:**\n${sourceLinks}`;
-      }
-
-      // Add bot response after delay
+      // Add bot message
       setTimeout(() => {
         const botMessage: ChatMessage = {
           id: Date.now().toString(),
-          message: response,
+          message: botResponse,
           sender: 'bot',
           direction: 'incoming',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, botMessage]);
         setIsTyping(false);
+        
+        // Bot speaks back!
+        speakResponse(botResponse);
       }, 800);
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        message: "Sorry, I encountered an error. Please try again.",
-        sender: 'bot',
-        direction: 'incoming',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
       setIsTyping(false);
     }
   };
@@ -147,72 +225,31 @@ export default function ChatKitBot({
     // ROS 2 questions
     if (lowerMessage.includes('ros 2') || lowerMessage.includes('ros2')) {
       if (lowerMessage.includes('difference') || lowerMessage.includes('vs') || lowerMessage.includes('ros 1')) {
-        return "Great question! ROS 2 offers several key improvements over ROS 1:\n\n✅ **Real-time capabilities** with DDS middleware\n✅ **Better security** with authentication and encryption\n✅ **Multi-platform support** (Linux, Windows, macOS)\n✅ **Improved communication** with Quality of Service (QoS)\n✅ **No central master node** - fully distributed architecture\n\n📚 Learn more in **Chapter 3: ROS 2 Architecture**";
+        return "Great question! ROS 2 offers several key improvements over ROS 1: Real-time capabilities, better security, and a distributed architecture with no central master. Learn more in Chapter 3!";
       }
-      if (lowerMessage.includes('publisher') || lowerMessage.includes('publish')) {
-        return "Here's how to create a ROS 2 publisher in Python:\n\n```python\nimport rclpy\nfrom rclpy.node import Node\nfrom std_msgs.msg import String\n\nclass MyPublisher(Node):\n    def __init__(self):\n        super().__init__('my_publisher')\n        self.publisher = self.create_publisher(\n            String, 'my_topic', 10\n        )\n        \n    def publish_message(self, text):\n        msg = String()\n        msg.data = text\n        self.publisher.publish(msg)\n```\n\n📚 See **Chapter 4: Building ROS 2 Packages** for complete examples!";
-      }
-      if (lowerMessage.includes('topic') || lowerMessage.includes('subscribe')) {
-        return "ROS 2 topics use a publish-subscribe pattern:\n\n**Publisher** sends messages → **Topic** → **Subscriber** receives messages\n\nKey concepts:\n- Topics are typed (std_msgs, sensor_msgs, etc.)\n- Multiple publishers/subscribers allowed\n- QoS policies control reliability\n\n📚 Check out **Chapter 5: Communication Patterns**";
-      }
+      return "ROS 2 is the industry standard for robotics middleware. It handles communication between nodes using topics, services, and actions.";
     }
 
-    // Kinematics questions
-    if (lowerMessage.includes('kinematics') || lowerMessage.includes('inverse')) {
-      return "**Inverse Kinematics (IK)** calculates the joint angles needed to reach a desired end-effector position.\n\n🤖 For humanoid robots:\n- **Forward Kinematics**: Joint angles → End position\n- **Inverse Kinematics**: End position → Joint angles\n\n**Common methods:**\n1. Analytical solutions (fast, limited)\n2. Jacobian-based methods (flexible)\n3. Numerical optimization (powerful)\n\n📚 **Chapter 11: Humanoid Kinematics & Dynamics** covers this in depth!";
+    if (lowerMessage.includes('kinematics')) {
+      return "Inverse Kinematics calculates the joint angles needed to reach a desired position. It's essential for humanoid movement!";
     }
 
-    // Balance/locomotion questions
     if (lowerMessage.includes('zmp') || lowerMessage.includes('zero moment')) {
-      return "**Zero Moment Point (ZMP)** is crucial for bipedal balance!\n\n🎯 **Key concept**: The ZMP is the point where the total moment of forces equals zero.\n\nFor stable walking:\n✅ ZMP must stay within the support polygon\n❌ If ZMP moves outside → robot falls\n\n**Applications:**\n- Gait generation\n- Balance control  \n- Fall detection\n\n📚 Dive deep in **Chapter 12: Bipedal Locomotion & Balance**";
+      return "The Zero Moment Point is critical for bipedal balance. It must stay within the support polygon to prevent the robot from falling.";
     }
 
-    // SLAM questions
-    if (lowerMessage.includes('slam')) {
-      return "**SLAM** (Simultaneous Localization and Mapping) helps robots:\n\n1️⃣ **Localize**: Know their position in the world\n2️⃣ **Map**: Build a map of the environment\n\n**Key techniques:**\n- Visual SLAM (using cameras)\n- LiDAR SLAM (using laser sensors)\n- Graph-based optimization\n- Loop closure detection\n\n💡 NVIDIA Isaac ROS provides GPU-accelerated SLAM!\n\n📚 Check out **Chapters 9-10** for SLAM and navigation";
-    }
-
-    // Gazebo/simulation
-    if (lowerMessage.includes('gazebo') || lowerMessage.includes('simulation')) {
-      return "**Gazebo** is a powerful robot simulation environment!\n\n**Key features:**\n- Realistic physics (ODE, Bullet, Simbody)\n- Sensor simulation (cameras, LiDAR, IMU)\n- URDF/SDF robot models\n- ROS 2 integration\n\n**Why use simulation?**\n✅ Test safely before real hardware\n✅ Faster development iteration\n✅ Generate synthetic training data\n\n📚 **Chapter 6: Gazebo Simulation** has complete tutorials!";
-    }
-
-    // Isaac Sim
-    if (lowerMessage.includes('isaac')) {
-      return "**NVIDIA Isaac** is a cutting-edge robotics platform!\n\n**Isaac Sim:**\n- Photorealistic simulation\n- GPU-accelerated physics (PhysX 5)\n- Synthetic data generation\n- Sim-to-real transfer\n\n**Isaac ROS:**\n- Hardware-accelerated perception\n- VSLAM and navigation\n- DNN inference on Jetson\n\n📚 **Chapters 8-10** cover the complete Isaac ecosystem!";
-    }
-
-    // VLA models
-    if (lowerMessage.includes('vla') || lowerMessage.includes('vision language action')) {
-      return "**Vision-Language-Action (VLA) models** are the future of robotics!\n\n🧠 **What they do:**\n- Understand visual inputs (cameras)\n- Process natural language commands\n- Generate robot actions\n\n**Examples:**\n- RT-1, RT-2 (Google)\n- OpenVLA (open-source)\n\n**Use cases:**\n- \"Pick up the red cup\" → Robot actions\n- Multimodal understanding\n- Natural human-robot interaction\n\n📚 **Chapter 13: VLA Models** explores this exciting field!";
-    }
-
-    // Sensors
-    if (lowerMessage.includes('sensor') || lowerMessage.includes('lidar') || lowerMessage.includes('camera')) {
-      return "Robot sensors are the eyes and ears of physical AI!\n\n**Common sensors:**\n- **LiDAR**: Laser distance measurement\n- **RGB-D Camera**: Color + Depth (RealSense)\n- **IMU**: Orientation and acceleration\n- **Force/Torque**: Contact sensing\n\n**Sensor fusion** combines multiple sensors for better perception.\n\n📚 **Chapter 2: Sensor Systems and Perception**";
-    }
-
-    // Default response with helpful suggestions
-    return `That's an interesting question about "${message}"!\n\nI can help you with:\n\n📖 **ROS 2 Fundamentals** (Chapters 3-5)\n🎮 **Simulation** with Gazebo & Unity (Chapters 6-7)\n🚀 **NVIDIA Isaac** Platform (Chapters 8-10)\n🤖 **Humanoid Robotics** (Chapters 11-12)\n🧠 **VLA Models** (Chapter 13)\n\nCould you be more specific about what you'd like to learn? Try asking:\n- "How does ROS 2 work?"\n- "What is inverse kinematics?"\n- "Explain SLAM"\n- "How do I simulate a robot?"`;
-  };
-
-  const handleQuickQuestion = (question: string) => {
-    handleSend(question);
+    return `That's an interesting point about ${message}! I can help you with ROS 2, simulation, or humanoid mechanics. What would you like to explore next?`;
   };
 
   return (
     <div className={styles.chatKitContainer}>
-      {/* Quick Questions - Only show at start */}
+      {/* Quick Questions */}
       {messages.length === 1 && (
         <div className={styles.quickQuestions}>
-          <p className={styles.quickQuestionsLabel}>💡 Quick questions to get started:</p>
+          <p className={styles.quickQuestionsLabel}>💡 Physical AI Topics:</p>
           <div className={styles.questionChips}>
             {quickQuestions.map((q, idx) => (
-              <button
-                key={idx}
-                className={styles.questionChip}
-                onClick={() => handleQuickQuestion(q)}
-              >
+              <button key={idx} className={styles.questionChip} onClick={() => handleSend(q)}>
                 {q}
               </button>
             ))}
@@ -224,11 +261,7 @@ export default function ChatKitBot({
       <MainContainer style={{ border: 'none', height: '100%' }}>
         <ChatContainer>
           <MessageList
-            typingIndicator={
-              isTyping ? (
-                <TypingIndicator content="Physical AI Tutor is thinking..." />
-              ) : null
-            }
+            typingIndicator={isTyping ? <TypingIndicator content="Physical AI Tutor is thinking..." /> : null}
           >
             {messages.map((msg) => (
               <Message
@@ -251,21 +284,55 @@ export default function ChatKitBot({
             ))}
             <div ref={messageEndRef} />
           </MessageList>
-          <MessageInput
-            placeholder={placeholder}
-            value={inputValue}
-            onChange={(val) => setInputValue(val)}
-            onSend={handleSend}
-            attachButton={false}
-            sendButton={true}
-          />
+          
+          <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(11, 11, 30, 0.9)', padding: '8px' }}>
+            {/* Voice Control Buttons */}
+            <div style={{ display: 'flex', gap: '8px', marginRight: '8px' }}>
+              <button 
+                className={`${styles.voiceButton} ${isListening ? styles.voiceButtonActive : ''}`}
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                onMouseLeave={stopRecording}
+                title="Hold to Speak"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+              </button>
+              
+              <button 
+                className={styles.voiceButton}
+                onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+                title={isVoiceEnabled ? "Mute Bot" : "Unmute Bot"}
+                style={{ opacity: isVoiceEnabled ? 1 : 0.4 }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d={isVoiceEnabled 
+                    ? "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
+                    : "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
+                  }/>
+                </svg>
+              </button>
+            </div>
+
+            <MessageInput
+              placeholder={isListening ? "Listening with ElevenLabs..." : placeholder}
+              value={inputValue}
+              onChange={(val) => setInputValue(val)}
+              onSend={handleSend}
+              attachButton={false}
+              sendButton={true}
+              style={{ flex: 1 }}
+            />
+          </div>
         </ChatContainer>
       </MainContainer>
 
       {/* Footer */}
       <div className={styles.chatFooter}>
         <small>
-          🤖 Powered by {useRealAPI ? 'OpenAI GPT-4o-mini + RAG' : 'Smart Demo Responses'}
+          🎤 Voice by ElevenLabs • 🤖 Powered by Physical AI RAG
         </small>
       </div>
     </div>

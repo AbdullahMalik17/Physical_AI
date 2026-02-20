@@ -1,11 +1,14 @@
-/* New Color Scheme */
+/* New Color Scheme - Cyberpunk Professional */
 :root {
-  --chat-bg-primary: #0F172A;
-  --chat-primary: #6366F1;
-  --chat-accent: #A78BFA;
-  --chat-text: #E5E7EB;
-  --chat-bg-secondary: #1E293B;
-  --chat-bubble-bot: #1E293B;
+  --chat-bg-primary: #050511;
+  --chat-primary: #00f2ff;
+  --chat-primary-glow: rgba(0, 242, 255, 0.3);
+  --chat-accent: #bd00ff;
+  --chat-accent-glow: rgba(189, 0, 255, 0.3);
+  --chat-text: #e2e8f0;
+  --chat-bg-secondary: #0b0b1e;
+  --chat-bubble-bot: rgba(15, 15, 38, 0.8);
+  --glass-border: 1px solid rgba(0, 242, 255, 0.2);
 }
 
 .chatKitContainer {
@@ -13,20 +16,24 @@
   flex-direction: column;
   height: 100%;
   background: var(--chat-bg-primary);
+  background-image: radial-gradient(circle at 50% 0%, rgba(189, 0, 255, 0.1), transparent);
 }
 
 /* Quick Questions Section */
 .quickQuestions {
   padding: 16px;
-  background: var(--chat-bg-secondary);
-  border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+  background: rgba(11, 11, 30, 0.6);
+  backdrop-filter: blur(10px);
+  border-bottom: var(--glass-border);
 }
 
 .quickQuestionsLabel {
   margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--chat-text);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: var(--chat-primary);
 }
 
 .questionChips {
@@ -36,26 +43,54 @@
 }
 
 .questionChip {
-  padding: 8px 14px;
-  background: var(--chat-primary);
-  color: white;
-  border: none;
-  border-radius: 20px;
-  font-size: 13px;
+  padding: 6px 14px;
+  background: rgba(0, 242, 255, 0.05);
+  color: var(--chat-primary);
+  border: 1px solid rgba(0, 242, 255, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   text-align: left;
 }
 
 .questionChip:hover {
-  background: var(--chat-accent);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  background: var(--chat-primary-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px var(--chat-primary-glow);
+  border-color: var(--chat-primary);
 }
 
-.questionChip:active {
-  transform: translateY(0);
+/* Voice Button Styling */
+.voiceButton {
+  background: transparent;
+  border: none;
+  color: var(--chat-primary);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.voiceButton:hover {
+  background: rgba(0, 242, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.voiceButtonActive {
+  color: var(--chat-accent) !important;
+  animation: pulse-glow 1.5s infinite;
+}
+
+@keyframes pulse-glow {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(189, 0, 255, 0.4); }
+  50% { transform: scale(1.1); box-shadow: 0 0 15px 5px rgba(189, 0, 255, 0.2); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(189, 0, 255, 0); }
 }
 
 /* Chat Footer */
@@ -63,121 +98,71 @@
   padding: 8px 16px;
   text-align: center;
   background: var(--chat-bg-secondary);
-  border-top: 1px solid rgba(99, 102, 241, 0.3);
+  border-top: var(--glass-border);
 }
 
 .chatFooter small {
-  color: var(--chat-accent);
-  font-size: 12px;
+  color: var(--chat-primary);
+  font-size: 11px;
+  opacity: 0.8;
+  letter-spacing: 0.5px;
 }
 
-/* Override ChatScope Styles for New Color Scheme */
+/* Override ChatScope Styles */
+:global(.cs-main-container) {
+  background: transparent !important;
+}
+
 :global(.cs-message-list) {
-  background: var(--chat-bg-primary) !important;
+  background: transparent !important;
+  padding: 1rem !important;
 }
 
 :global(.cs-message__content) {
   background: var(--chat-bubble-bot) !important;
+  backdrop-filter: blur(5px);
   color: var(--chat-text) !important;
-  border-left: 3px solid var(--chat-accent);
-}
-
-:global(.cs-message--incoming .cs-message__content) {
-  background: var(--chat-bg-secondary) !important;
-  border-left: 3px solid var(--chat-accent);
+  border: var(--glass-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
 }
 
 :global(.cs-message--outgoing .cs-message__content) {
-  background: var(--chat-primary) !important;
+  background: linear-gradient(135deg, var(--chat-accent), #7c3aed) !important;
+  border: none !important;
   color: white !important;
-  border-left: none;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 15px var(--chat-accent-glow) !important;
 }
 
 :global(.cs-message-input) {
-  background: var(--chat-bg-secondary) !important;
-  border-top: 2px solid var(--chat-primary) !important;
+  background: rgba(11, 11, 30, 0.9) !important;
+  backdrop-filter: blur(15px);
+  border-top: var(--glass-border) !important;
+  padding: 12px !important;
 }
 
 :global(.cs-message-input__content-editor) {
-  background: var(--chat-bg-primary) !important;
-  color: var(--chat-text) !important;
-  border: 2px solid transparent;
-  border-radius: 24px;
-  transition: all 0.3s ease;
-}
-
-:global(.cs-message-input__content-editor:focus) {
-  outline: none !important;
-  border-color: var(--chat-primary) !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 8px 12px !important;
 }
 
 :global(.cs-button--send) {
-  background: var(--chat-primary) !important;
-  color: white !important;
-  transition: all 0.3s ease;
+  color: var(--chat-primary) !important;
 }
 
-:global(.cs-button--send:hover) {
-  background: var(--chat-accent) !important;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
-  transform: scale(1.05);
+:global(.cs-button--send:disabled) {
+  opacity: 0.3 !important;
 }
 
-:global(.cs-typing-indicator) {
-  background: transparent !important;
-}
-
-:global(.cs-typing-indicator__text) {
-  color: var(--ifm-color-emphasis-700) !important;
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-  .questionChips {
-    flex-direction: column;
-  }
-
-  .questionChip {
-    width: 100%;
-    text-align: center;
-  }
-}
-
-/* Code blocks in messages */
-:global(.cs-message__content pre) {
-  background: rgba(0, 0, 0, 0.1);
-  padding: 8px;
-  border-radius: 4px;
-  overflow-x: auto;
-  margin: 8px 0;
-}
-
-:global(.cs-message__content code) {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-}
-
-/* Emojis and icons */
-:global(.cs-message__content) {
-  line-height: 1.6;
-}
-
-/* Scrollbar styling */
+/* Custom Scrollbar */
 :global(.cs-message-list__scroll-wrapper)::-webkit-scrollbar {
-  width: 8px;
-}
-
-:global(.cs-message-list__scroll-wrapper)::-webkit-scrollbar-track {
-  background: var(--ifm-color-emphasis-100);
+  width: 4px;
 }
 
 :global(.cs-message-list__scroll-wrapper)::-webkit-scrollbar-thumb {
-  background: var(--ifm-color-emphasis-400);
-  border-radius: 4px;
-}
-
-:global(.cs-message-list__scroll-wrapper)::-webkit-scrollbar-thumb:hover {
-  background: var(--ifm-color-emphasis-600);
+  background: var(--chat-primary);
+  border-radius: 10px;
 }

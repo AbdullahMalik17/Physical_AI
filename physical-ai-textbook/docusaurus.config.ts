@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Physical AI',
-  tagline: 'From Simulation to Reality',
+  tagline: 'The Definitive Guide to Embodied Intelligence: Master the Sim-to-Real Frontier',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -97,7 +97,48 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
-      copyright: `Copyright © ${new Date().getFullYear()} Physical AI Project. Built with Docusaurus.`,
+      links: [
+        {
+          title: 'Learn',
+          items: [
+            {
+              label: 'Introduction',
+              to: '/',
+            },
+            {
+              label: 'Fundamentals',
+              to: '/part1-fundamentals/chapter1-embodied-intelligence',
+            },
+          ],
+        },
+        {
+          title: 'Community & Code',
+          items: [
+            {
+              label: 'GitHub Repository',
+              href: 'https://github.com/AbdullahMalik17/Physical_AI',
+            },
+            {
+              label: 'Report an Issue',
+              href: 'https://github.com/AbdullahMalik17/Physical_AI/issues',
+            },
+          ],
+        },
+        {
+          title: 'Author',
+          items: [
+            {
+              label: 'About Abdullah Malik',
+              href: 'https://github.com/AbdullahMalik17',
+            },
+            {
+              label: 'Follow on GitHub',
+              href: 'https://github.com/AbdullahMalik17',
+            },
+          ],
+        },
+      ],
+      copyright: `Copyright © ${new Date().getFullYear()} Abdullah Malik & The Physical AI Project. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

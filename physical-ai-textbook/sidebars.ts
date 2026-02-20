@@ -67,6 +67,11 @@ const sidebars: SidebarsConfig = {
         'part5-cognitive-robotics/chapter13-vla-models',
       ],
     },
+    {
+      type: 'doc',
+      id: 'about-the-writer',
+      label: 'About the Writer',
+    },
   ],
 };
 
