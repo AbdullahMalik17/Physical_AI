@@ -76,10 +76,10 @@ export default async function handler(
 
     res.status(200).setHeader('Content-Type', 'application/json').json(chatResponse);
   } catch (error) {
-    console.error('Chat API error:', error);
+    const errorMessage = error instanceof Error ? redactSecrets(error.message) : 'Unknown error';
+    console.error('Chat API error:', errorMessage);
     res.status(500).json({
       error: 'Failed to generate response',
-      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 }
@@ -247,7 +247,7 @@ async function generateWithOpenAI(prompt: string, apiKey: string): Promise<strin
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
+    throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
@@ -273,11 +273,15 @@ async function generateWithAnthropic(prompt: string, apiKey: string): Promise<st
   });
 
   if (!response.ok) {
-    throw new Error(`Anthropic API error: ${response.statusText}`);
+    throw new Error(`Anthropic API error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
   return data.content[0]?.text || 'No response generated';
+}
+
+function redactSecrets(message: string): string {
+  return message.replace(/sk-[A-Za-z0-9_-]{10,}/g, 'sk-***');
 }
 
 /**

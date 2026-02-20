@@ -49,9 +49,22 @@
 
 /* Base styling enhancements */
 body {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  background-color: #0b1220;
+  background-image:
+    radial-gradient(1200px 600px at 12% 8%, rgba(61, 219, 217, 0.12), transparent 55%),
+    radial-gradient(900px 520px at 92% 12%, rgba(255, 138, 91, 0.12), transparent 60%),
+    linear-gradient(180deg, #0b1220 0%, #0a0f1b 55%, #090d17 100%);
   background-attachment: fixed;
-  opacity: 0.98;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.05), transparent 45%);
+  mix-blend-mode: screen;
+  opacity: 0.6;
 }
 
 [data-theme='dark'] {

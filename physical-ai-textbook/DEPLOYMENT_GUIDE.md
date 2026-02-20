@@ -48,7 +48,7 @@ You need to add your API keys to Vercel. Run these commands:
 ```bash
 # Add OpenAI API Key
 vercel env add OPENAI_API_KEY production
-# When prompted, paste: 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
+# When prompted, paste: sk-proj-your-openai-api-key-here
 
 # Add Pinecone API Key
 vercel env add PINECONE_API_KEY production
